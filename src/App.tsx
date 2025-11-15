@@ -44,6 +44,8 @@ export default function App() {
         // Buscar dados do perfil no Firestore
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          const charDoc = await getDoc(doc(db, 'characters', currentUser.uid));
+          
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setUserData((prev) => ({
@@ -52,8 +54,38 @@ export default function App() {
               age: userData.age || 0,
               email: currentUser.email || '',
             }));
-            // Se já tem nome e idade preenchidos, pula para avatar
-            setCurrentStep('avatar');
+            
+            // Se já tem personagem criado, verificar se já respondeu o quiz
+            if (charDoc.exists()) {
+              const charData = charDoc.data();
+              setUserData((prev) => ({
+                ...prev,
+                avatar: `${charData.gender}-${charData.hairId}`,
+              }));
+
+              // Verificar se o usuário já respondeu o quiz
+              try {
+                const quizResultsRef = await getDoc(
+                  doc(db, 'users', currentUser.uid)
+                );
+                const hasCompletedQuiz = quizResultsRef.data()?.quizStats?.lastQuizDate;
+
+                if (hasCompletedQuiz) {
+                  // Já respondeu o quiz, vai direto para o menu
+                  setCurrentStep('menu');
+                } else {
+                  // Ainda não respondeu, vai para o quiz
+                  setCurrentStep('quiz');
+                }
+              } catch (quizError) {
+                console.error('Erro ao verificar quiz:', quizError);
+                // Em caso de erro, vai para o quiz
+                setCurrentStep('quiz');
+              }
+            } else {
+              // Se tem perfil mas sem personagem, vai para seleção de avatar
+              setCurrentStep('avatar');
+            }
           } else {
             // Se não tem perfil, mostra o formulário
             setCurrentStep('profile');
@@ -106,7 +138,25 @@ export default function App() {
   };
 
   const navigateTo = (step: GameStep) => {
-    setCurrentStep(step);
+    // Bloquear tentativa de navegar para quiz se já foi respondido
+    if (step === 'quiz') {
+      // Verificar se o usuário já respondeu o quiz
+      const userDocRef = doc(db, 'users', userId || '');
+      getDoc(userDocRef).then((userDoc) => {
+        const hasCompletedQuiz = userDoc.data()?.quizStats?.lastQuizDate;
+        if (hasCompletedQuiz) {
+          console.warn('Usuário já respondeu o quiz. Acesso bloqueado.');
+          return; // Bloqueia o acesso
+        } else {
+          setCurrentStep(step);
+        }
+      }).catch((error) => {
+        console.error('Erro ao verificar quiz:', error);
+        setCurrentStep(step);
+      });
+    } else {
+      setCurrentStep(step);
+    }
   };
 
   // Keep the existing app UI as the root element for the default route

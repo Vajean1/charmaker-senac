@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -11,96 +11,496 @@ import {
   Share2, 
   Send,
   TrendingUp,
-  Clock
+  Clock,
+  Trash,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserData } from '../App';
+import Avatar3D from './Avatar3D';
+// import raw detox lists
+// @ts-ignore - Vite raw import
+import frasesTxt from '../detoxlinguistico/frases.txt?raw';
+// @ts-ignore - Vite raw import
+import palavrasTxt from '../detoxlinguistico/palavras.txt?raw';
+import { auth, db } from '../firebase/firebase';
+import { 
+  doc, 
+  getDoc, 
+  setDoc,
+  collection,
+  query,
+  orderBy,
+  getDocs,
+  deleteDoc,
+  addDoc,
+  updateDoc,
+  increment,
+  arrayUnion,
+  arrayRemove,
+  Timestamp
+} from 'firebase/firestore';
 
 type CommunityProps = {
   userData: UserData;
   onBack: () => void;
 };
 
-type Post = {
-  id: number;
+type Comment = {
+  id: string;
   author: string;
+  authorId: string;
+  content: string;
+  createdAt: any;
+  character?: {
+    gender: string;
+    bodyType: string;
+    skinColor: string;
+    faceOption: string;
+    hairId: number;
+  };
+  likes: number;
+  likedBy: string[];
+};
+
+type Post = {
+  id: string;
+  author: string;
+  authorId: string;
   avatar: string;
   time: string;
   content: string;
   likes: number;
-  comments: number;
+  likedBy: string[];
+  comments: Comment[];
   category: string;
+  createdAt: any;
+  character?: {
+    gender: string;
+    bodyType: string;
+    skinColor: string;
+    faceOption: string;
+    hairId: number;
+  };
 };
 
-const initialPosts: Post[] = [
-  {
-    id: 1,
-    author: 'Mariana Santos',
-    avatar: '👩🏿',
-    time: 'há 2 horas',
-    content: 'Acabei de fazer o quiz e aprendi muito! É importante refletirmos sobre nossas atitudes diárias. Alguém mais teve insights interessantes?',
-    likes: 24,
-    comments: 8,
-    category: 'Reflexão'
-  },
-  {
-    id: 2,
-    author: 'Carlos Eduardo',
-    avatar: '👨🏾',
-    time: 'há 5 horas',
-    content: 'Visitei o Museu do Homem do Nordeste hoje e foi uma experiência incrível! Recomendo muito para quem quer conhecer mais sobre nossa história e cultura.',
-    likes: 45,
-    comments: 12,
-    category: 'Cultura'
-  },
-  {
-    id: 3,
-    author: 'Júlia Oliveira',
-    avatar: '👩🏾',
-    time: 'há 1 dia',
-    content: 'Estou lendo "Pequeno Manual Antirracista" da Djamila Ribeiro e está transformando minha perspectiva. Quem mais já leu? Vamos trocar ideias!',
-    likes: 67,
-    comments: 23,
-    category: 'Literatura'
-  },
-  {
-    id: 4,
-    author: 'Roberto Lima',
-    avatar: '🧑🏿',
-    time: 'há 2 dias',
-    content: 'Descobri um coletivo incrível no Recife que promove atividades culturais afrocentradas. Alguém conhece outros espaços assim na região?',
-    likes: 31,
-    comments: 15,
-    category: 'Comunidade'
-  }
-];
+const initialPosts: Post[] = [];
 
 export function Community({ userData, onBack }: CommunityProps) {
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'trending'>('recent');
+  const [character, setCharacter] = useState<any>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [expandedComments, setExpandedComments] = useState<string[]>([]);
+  const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
+  const [blockedViolation, setBlockedViolation] = useState<null | { matched: string; fullText: string; type: 'post' | 'comment'; postId?: string }>(null);
 
-  const handleSubmitPost = () => {
-    if (newPost.trim()) {
-      const post: Post = {
-        id: posts.length + 1,
+  // Parse detox files into arrays
+  const frasesList: string[] = (frasesTxt || '').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean) as string[];
+  const palavrasList: string[] = (palavrasTxt || '').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean) as string[];
+
+  // Normalization helpers
+  const removeDiacritics = (str: string) => str.normalize?.('NFD').replace(/[\u0300-\u036f]/g, '') || str;
+  const normalize = (str: string) => removeDiacritics(str).toLowerCase();
+
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+
+  // Check text for forbidden words/phrases and report violation to Firestore if found.
+  const checkAndReport = async (text: string, type: 'post' | 'comment', postId?: string) => {
+    if (!text || !text.trim()) return false;
+    const normalizedText = normalize(text);
+
+    // Check phrases first (substring matches)
+    for (const phrase of frasesList) {
+      const normPhrase = normalize(phrase);
+      if (!normPhrase) continue;
+      if (normalizedText.includes(normPhrase)) {
+        const matched = phrase;
+        // report to DB
+        try {
+          const user = auth.currentUser;
+          await addDoc(collection(db, 'violations'), {
+            userId: user?.uid || null,
+            userName: userData?.name || null,
+            matched,
+            fullText: text,
+            type,
+            postId: postId || null,
+            createdAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.error('Erro ao salvar violação:', e);
+        }
+        setBlockedViolation({ matched, fullText: text, type, postId });
+        return true;
+      }
+    }
+
+    // Check words (whole word matches)
+    for (const word of palavrasList) {
+      const normWord = normalize(word);
+      if (!normWord) continue;
+      const re = new RegExp('\\b' + escapeRegExp(normWord) + '\\b', 'u');
+      if (re.test(normalizedText)) {
+        const matched = word;
+        try {
+          const user = auth.currentUser;
+          await addDoc(collection(db, 'violations'), {
+            userId: user?.uid || null,
+            userName: userData?.name || null,
+            matched,
+            fullText: text,
+            type,
+            postId: postId || null,
+            createdAt: Timestamp.now()
+          });
+        } catch (e) {
+          console.error('Erro ao salvar violação:', e);
+        }
+        setBlockedViolation({ matched, fullText: text, type, postId });
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Formatar tempo relativo
+  const formatRelativeTime = (timestamp: any) => {
+    if (!timestamp) return 'agora';
+    const date = timestamp.toDate?.() || new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'agora';
+    if (diffMins < 60) return `há ${diffMins}m`;
+    if (diffHours < 24) return `há ${diffHours}h`;
+    if (diffDays < 7) return `há ${diffDays}d`;
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  // Load character data from Firestore
+  useEffect(() => {
+    const loadCharacter = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          setLoadingCharacter(false);
+          return;
+        }
+        const charDoc = await getDoc(doc(db, 'characters', user.uid));
+        if (charDoc.exists()) {
+          setCharacter(charDoc.data());
+        }
+      } catch (e) {
+        console.error('Erro ao carregar personagem:', e);
+      } finally {
+        setLoadingCharacter(false);
+      }
+    }
+    loadCharacter();
+  }, []);
+
+  // Carregar posts do Firestore
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        setLoadingPosts(true);
+        const postsQuery = query(
+          collection(db, 'posts'),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(postsQuery);
+        const loadedPosts: Post[] = [];
+
+        for (const docSnapshot of querySnapshot.docs) {
+          const postData = docSnapshot.data();
+          
+          // Carregar comentários
+          const commentsQuery = query(
+            collection(db, 'posts', docSnapshot.id, 'comments'),
+            orderBy('createdAt', 'desc')
+          );
+          const commentsSnapshot = await getDocs(commentsQuery);
+          const comments: Comment[] = commentsSnapshot.docs.map(commentDoc => ({
+            id: commentDoc.id,
+            ...commentDoc.data(),
+            createdAt: commentDoc.data().createdAt
+          })) as Comment[];
+
+          loadedPosts.push({
+            id: docSnapshot.id,
+            author: postData.author,
+            authorId: postData.authorId,
+            avatar: postData.avatar,
+            content: postData.content,
+            category: postData.category || 'Compartilhamento',
+            likes: postData.likes || 0,
+            likedBy: postData.likedBy || [],
+            comments: comments,
+            createdAt: postData.createdAt,
+            time: formatRelativeTime(postData.createdAt),
+            character: postData.character
+          });
+        }
+
+        setPosts(loadedPosts);
+      } catch (e) {
+        console.error('Erro ao carregar posts:', e);
+      } finally {
+        setLoadingPosts(false);
+      }
+    };
+
+    loadPosts();
+  }, []);
+
+  // Publicar novo post
+  const handleSubmitPost = async () => {
+    if (!newPost.trim()) return;
+    
+    try {
+      // Check for forbidden words/phrases and report if any
+      const blocked = await checkAndReport(newPost, 'post');
+      if (blocked) return;
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const postId = `post_${Date.now()}`;
+      const postData = {
         author: userData.name,
+        authorId: user.uid,
         avatar: userData.avatar,
-        time: 'agora',
         content: newPost,
+        category: 'Compartilhamento',
         likes: 0,
-        comments: 0,
-        category: 'Compartilhamento'
+        likedBy: [],
+        createdAt: Timestamp.now(),
+        character: character
       };
-      setPosts([post, ...posts]);
+
+      await setDoc(doc(db, 'posts', postId), postData);
+
+      // Atualizar UI imediatamente
+      setPosts([
+        {
+          id: postId,
+          ...postData,
+          comments: [],
+          time: 'agora'
+        },
+        ...posts
+      ]);
+
       setNewPost('');
+    } catch (e) {
+      console.error('Erro ao publicar post:', e);
     }
   };
 
-  const handleLike = (postId: number) => {
-    setPosts(posts.map(post => 
-      post.id === postId ? { ...post, likes: post.likes + 1 } : post
-    ));
+  // Like/Unlike post
+  const handleLike = async (postId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const postRef = doc(db, 'posts', postId);
+      const postData = posts.find(p => p.id === postId);
+      
+      if (!postData) return;
+
+      const isLiked = postData.likedBy.includes(user.uid);
+
+      if (isLiked) {
+        // Unlike
+        await updateDoc(postRef, {
+          likes: increment(-1),
+          likedBy: arrayRemove(user.uid)
+        });
+        setPosts(posts.map(p => 
+          p.id === postId 
+            ? { ...p, likes: p.likes - 1, likedBy: p.likedBy.filter(id => id !== user.uid) }
+            : p
+        ));
+      } else {
+        // Like
+        await updateDoc(postRef, {
+          likes: increment(1),
+          likedBy: arrayUnion(user.uid)
+        });
+        setPosts(posts.map(p => 
+          p.id === postId 
+            ? { ...p, likes: p.likes + 1, likedBy: [...p.likedBy, user.uid] }
+            : p
+        ));
+      }
+    } catch (e) {
+      console.error('Erro ao fazer like:', e);
+    }
+  };
+
+  // Deletar post (apenas autor pode deletar) - flow separado entre abrir modal e executar
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+
+  // abre modal de confirmação
+  const confirmDeletePost = (postId: string) => {
+    setDeletingPostId(postId);
+  };
+
+  // cancelar exclusão
+  const cancelDelete = () => {
+    setDeletingPostId(null);
+  };
+
+  // executa exclusão depois da confirmação
+  const performDeletePost = async (postId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      if (post.authorId !== user.uid) {
+        console.warn('Usuário não autorizado a deletar este post');
+        setDeletingPostId(null);
+        return;
+      }
+
+      // Deletar comentários primeiro
+      const commentsSnap = await getDocs(collection(db, 'posts', postId, 'comments'));
+      const deletePromises: Promise<any>[] = [];
+      commentsSnap.forEach(cd => {
+        deletePromises.push(deleteDoc(doc(db, 'posts', postId, 'comments', cd.id)));
+      });
+      await Promise.all(deletePromises);
+
+      // Deletar o post
+      await deleteDoc(doc(db, 'posts', postId));
+
+      // Atualizar UI
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      setDeletingPostId(null);
+    } catch (e) {
+      console.error('Erro ao deletar post:', e);
+      setDeletingPostId(null);
+    }
+  };
+
+  // Toggle comentários expandidos
+  const toggleComments = (postId: string) => {
+    setExpandedComments(prev =>
+      prev.includes(postId)
+        ? prev.filter(id => id !== postId)
+        : [...prev, postId]
+    );
+  };
+
+  // Publicar comentário
+  const handleSubmitComment = async (postId: string) => {
+    const commentText = newComments[postId];
+    if (!commentText?.trim()) return;
+
+    try {
+      // Check for forbidden words/phrases and report if any
+      const blocked = await checkAndReport(commentText, 'comment', postId);
+      if (blocked) return;
+
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const commentId = `comment_${Date.now()}`;
+      const commentData = {
+        author: userData.name,
+        authorId: user.uid,
+        content: commentText,
+        likes: 0,
+        likedBy: [],
+        createdAt: Timestamp.now(),
+        character: character
+      };
+
+      await setDoc(
+        doc(db, 'posts', postId, 'comments', commentId),
+        commentData
+      );
+
+      // Atualizar UI
+      setPosts(posts.map(p => 
+        p.id === postId
+          ? {
+              ...p,
+              comments: [
+                {
+                  id: commentId,
+                  ...commentData,
+                  createdAt: commentData.createdAt
+                },
+                ...p.comments
+              ]
+            }
+          : p
+      ));
+
+      setNewComments(prev => ({ ...prev, [postId]: '' }));
+    } catch (e) {
+      console.error('Erro ao comentar:', e);
+    }
+  };
+
+  // Like comentário
+  const handleLikeComment = async (postId: string, commentId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const post = posts.find(p => p.id === postId);
+      const comment = post?.comments.find(c => c.id === commentId);
+      if (!comment) return;
+
+      const commentRef = doc(db, 'posts', postId, 'comments', commentId);
+      const isLiked = comment.likedBy.includes(user.uid);
+
+      if (isLiked) {
+        await updateDoc(commentRef, {
+          likes: increment(-1),
+          likedBy: arrayRemove(user.uid)
+        });
+      } else {
+        await updateDoc(commentRef, {
+          likes: increment(1),
+          likedBy: arrayUnion(user.uid)
+        });
+      }
+
+      // Atualizar UI
+      setPosts(posts.map(p =>
+        p.id === postId
+          ? {
+              ...p,
+              comments: p.comments.map(c =>
+                c.id === commentId
+                  ? {
+                      ...c,
+                      likes: isLiked ? c.likes - 1 : c.likes + 1,
+                      likedBy: isLiked
+                        ? c.likedBy.filter(id => id !== user.uid)
+                        : [...c.likedBy, user.uid]
+                    }
+                  : c
+              )
+            }
+          : p
+      ));
+    } catch (e) {
+      console.error('Erro ao fazer like em comentário:', e);
+    }
   };
 
   return (
@@ -114,6 +514,51 @@ export function Community({ userData, onBack }: CommunityProps) {
           <h1 className="text-purple-800">Comunidade</h1>
           <p className="text-gray-600">Compartilhe experiências e aprenda com outras pessoas</p>
         </div>
+        {/* Delete confirmation modal */}
+        {deletingPostId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/60 z-40"
+              onClick={cancelDelete}
+              // inline style to ensure backdrop blur works even if Tailwind's utility isn't available
+              style={{
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)'
+              }}
+            />
+            <Card className="z-50 p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar exclusão</h3>
+              <p className="text-sm text-gray-600 mb-4">Deseja realmente deletar este post? Esta ação é irreversível e removerá também os comentários.</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={cancelDelete}>Cancelar</Button>
+                <Button variant="destructive" onClick={() => performDeletePost(deletingPostId)}>Apagar</Button>
+              </div>
+            </Card>
+          </div>
+        )}
+          {/* Blocked content modal (detected forbidden word/phrase) */}
+          {blockedViolation && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/70 z-40"
+                onClick={() => setBlockedViolation(null)}
+                style={{
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)'
+                }}
+              />
+              <Card className="z-50 p-6 w-full max-w-md">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Publicação bloqueada</h3>
+                <p className="text-sm text-gray-600 mb-4">Bloqueamos sua {blockedViolation.type === 'post' ? 'publicação' : 'comentário'} pelo seguinte motivo:</p>
+                <p className="mb-4"><span className="text-red-600 font-semibold">{blockedViolation.matched}</span></p>
+                <p className="text-sm text-gray-500 mb-4">Texto enviado:</p>
+                <div className="p-3 bg-gray-50 rounded text-sm text-gray-700 mb-4">{blockedViolation.fullText}</div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setBlockedViolation(null)}>Fechar</Button>
+                </div>
+              </Card>
+            </div>
+          )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -122,9 +567,21 @@ export function Community({ userData, onBack }: CommunityProps) {
           {/* Create Post */}
           <Card className="p-6">
             <div className="flex gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl">{userData.avatar}</span>
-              </div>
+              {!loadingCharacter && character ? (
+                <Avatar3D
+                  gender={character.gender}
+                  bodyType={character.bodyType}
+                  skinColor={character.skinColor}
+                  faceOption={character.faceOption}
+                  hairId={character.hairId}
+                  size={48}
+                  bgGradient="linear-gradient(135deg, #9333ea 0%, #7c3aed 50%, #6d28d9 100%)"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">{userData.avatar}</span>
+                </div>
+              )}
               <div className="flex-grow">
                 <Textarea
                   placeholder="Compartilhe suas reflexões, experiências ou perguntas..."
@@ -162,54 +619,178 @@ export function Community({ userData, onBack }: CommunityProps) {
 
           {/* Posts Feed */}
           <div className="space-y-4">
-            {posts.map((post, index) => (
-              <motion.div
-                key={post.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card className="p-6 hover:shadow-lg transition-shadow">
-                  {/* Post Header */}
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">{post.avatar}</span>
-                    </div>
-                    <div className="flex-grow">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-gray-800">{post.author}</p>
-                        <Badge variant="secondary" className="text-xs">
-                          {post.category}
-                        </Badge>
+            {loadingPosts ? (
+              <div className="text-center py-8 text-gray-600">Carregando posts...</div>
+            ) : posts.length === 0 ? (
+              <div className="text-center py-8 text-gray-600">Nenhum post ainda. Seja o primeiro a compartilhar!</div>
+            ) : (
+              posts.map((post, index) => (
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card className="p-6 hover:shadow-lg transition-shadow">
+                    {/* Post Header */}
+                    <div className="flex items-start gap-4 mb-4">
+                        {post.character ? (
+                        <Avatar3D
+                          gender={post.character.gender}
+                          bodyType={post.character.bodyType}
+                          skinColor={post.character.skinColor}
+                          faceOption={post.character.faceOption}
+                          hairId={post.character.hairId}
+                          size={48}
+                          bgGradient="linear-gradient(135deg, #9333ea 0%, #7c3aed 50%, #6d28d9 100%)"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-2xl">{post.avatar}</span>
+                        </div>
+                      )}
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-gray-800 font-semibold">{post.author}</p>
+                          <Badge variant="secondary" className="text-xs">
+                            {post.category}
+                          </Badge>
+                        </div>
+                        <p className="text-gray-500 text-sm">{post.time}</p>
                       </div>
-                      <p className="text-gray-500 text-sm">{post.time}</p>
                     </div>
-                  </div>
 
-                  {/* Post Content */}
-                  <p className="text-gray-700 mb-4">{post.content}</p>
+                    {/* Post Content */}
+                    <p className="text-gray-700 mb-4">{post.content}</p>
 
-                  {/* Post Actions */}
-                  <div className="flex items-center gap-6 pt-4 border-t">
-                    <button
-                      onClick={() => handleLike(post.id)}
-                      className="flex items-center gap-2 text-gray-600 hover:text-rose-600 transition-colors"
-                    >
-                      <Heart className="w-5 h-5" />
-                      <span className="text-sm">{post.likes}</span>
-                    </button>
-                    <button className="flex items-center gap-2 text-gray-600 hover:text-purple-600 transition-colors">
-                      <MessageCircle className="w-5 h-5" />
-                      <span className="text-sm">{post.comments}</span>
-                    </button>
-                    <button className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors ml-auto">
-                      <Share2 className="w-5 h-5" />
-                      <span className="text-sm">Compartilhar</span>
-                    </button>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
+                    {/* Post Actions */}
+                    <div className="flex items-center gap-6 pt-4 border-t">
+                      <button
+                        onClick={() => handleLike(post.id)}
+                        className={`flex items-center gap-2 transition-colors ${
+                          post.likedBy.includes(auth.currentUser?.uid || '')
+                            ? 'text-rose-600'
+                            : 'text-gray-600 hover:text-rose-600'
+                        }`}
+                      >
+                        <Heart className={`w-5 h-5 ${post.likedBy.includes(auth.currentUser?.uid || '') ? 'fill-current' : ''}`} />
+                        <span className="text-sm">{post.likes}</span>
+                      </button>
+                      <button
+                        onClick={() => toggleComments(post.id)}
+                        className="flex items-center gap-2 text-gray-600 hover:text-purple-600 transition-colors"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                        <span className="text-sm">{post.comments.length}</span>
+                      </button>
+                      <button className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors ml-auto">
+                        <Share2 className="w-5 h-5" />
+                        <span className="text-sm">Compartilhar</span>
+                      </button>
+                      {post.authorId === auth.currentUser?.uid && (
+                        <button
+                          onClick={() => confirmDeletePost(post.id)}
+                          className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors"
+                        >
+                          <Trash className="w-5 h-5" />
+                          <span className="text-sm">Apagar</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Comments Section */}
+                    {expandedComments.includes(post.id) && (
+                      <div className="mt-6 pt-6 border-t space-y-4">
+                        {/* Add Comment */}
+                        <div className="flex gap-4">
+                          {character ? (
+                            <Avatar3D
+                              gender={character.gender}
+                              bodyType={character.bodyType}
+                              skinColor={character.skinColor}
+                              faceOption={character.faceOption}
+                              hairId={character.hairId}
+                              size={40}
+                              bgGradient="linear-gradient(135deg, #9333ea 0%, #7c3aed 50%, #6d28d9 100%)"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-violet-600 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">{userData.avatar}</span>
+                            </div>
+                          )}
+                          <div className="flex-grow">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Escreva um comentário..."
+                                value={newComments[post.id] || ''}
+                                onChange={(e) =>
+                                  setNewComments(prev => ({
+                                    ...prev,
+                                    [post.id]: e.target.value
+                                  }))
+                                }
+                                className="flex-grow px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleSubmitComment(post.id)}
+                                disabled={!newComments[post.id]?.trim()}
+                              >
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Comments List */}
+                        {post.comments.length > 0 && (
+                          <div className="space-y-4 mt-4">
+                            {post.comments.map((comment) => (
+                              <div key={comment.id} className="flex gap-3 pl-2 border-l-2 border-gray-200">
+                                {comment.character ? (
+                                        <Avatar3D
+                                          gender={comment.character.gender}
+                                          bodyType={comment.character.bodyType}
+                                          skinColor={comment.character.skinColor}
+                                          faceOption={comment.character.faceOption}
+                                          hairId={comment.character.hairId}
+                                          size={36}
+                                          bgGradient="linear-gradient(135deg, #9333ea 0%, #7c3aed 50%, #6d28d9 100%)"
+                                        />
+                                      ) : (
+                                        <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-violet-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                          <span className="text-lg">👤</span>
+                                        </div>
+                                      )}
+                                <div className="flex-grow">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-gray-800 text-sm font-semibold">{comment.author}</p>
+                                    <p className="text-gray-500 text-xs">{formatRelativeTime(comment.createdAt)}</p>
+                                  </div>
+                                  <p className="text-gray-700 text-sm mb-2">{comment.content}</p>
+                                  <button
+                                    onClick={() => handleLikeComment(post.id, comment.id)}
+                                    className={`flex items-center gap-1 text-xs transition-colors ${
+                                      comment.likedBy.includes(auth.currentUser?.uid || '')
+                                        ? 'text-rose-600'
+                                        : 'text-gray-600 hover:text-rose-600'
+                                    }`}
+                                  >
+                                    <Heart className={`w-3 h-3 ${comment.likedBy.includes(auth.currentUser?.uid || '') ? 'fill-current' : ''}`} />
+                                    <span>{comment.likes > 0 ? comment.likes : ''}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
 

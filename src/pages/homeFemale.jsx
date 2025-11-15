@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
+// firestore handled by SaveCharacter component
+import SaveButton from '../components/SaveCharacter'
 import { Canvas, useLoader } from '@react-three/fiber'
 import { OrbitControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
@@ -113,7 +115,7 @@ const MAIN_SECTIONS = [
 
 // We'll load models directly in the component so we can render body + hairs inside the same group
 
-function Home() {
+function Home({ onDone }) {
   // Model position presets
   const modelPresets = [
     {
@@ -647,8 +649,20 @@ function Home() {
       <div className="viewer-container">
         {/* overlays */}
         <div className="overlay-top">
-          <button onClick={() => setSelectedHair((s) => Math.max(0, s - 1))}>&lt;</button>
-          <button onClick={() => setSelectedHair((s) => Math.min(MAX_HAIR_ID, s + 1))}>&gt;</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setSelectedHair((s) => Math.max(0, s - 1))}>&lt;</button>
+            <button onClick={() => setSelectedHair((s) => Math.min(MAX_HAIR_ID, s + 1))}>&gt;</button>
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <SaveButton
+              gender="female"
+              selectedBodyType={selectedBodyType}
+              selectedSkinColor={selectedSkinColor}
+              selectedFaceOption={selectedFaceOption}
+              selectedHair={selectedHair}
+              onDone={onDone}
+            />
+          </div>
         </div>
         {/* Preset position arrows */}
         <div className="preset-arrows">

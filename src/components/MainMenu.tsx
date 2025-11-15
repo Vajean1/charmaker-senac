@@ -1,4 +1,5 @@
 import { Card } from './ui/card';
+import { Button } from './ui/button';
 import { 
   Users, 
   BookOpen, 
@@ -6,10 +7,16 @@ import {
   Sparkles, 
   Heart,
   Trophy,
-  ArrowRight
+  ArrowRight,
+  LogOut
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserData, GameStep } from '../App';
+import Avatar3D from './Avatar3D';
+import { useState, useEffect } from 'react';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 
 type MainMenuProps = {
   userData: UserData;
@@ -69,6 +76,40 @@ const menuOptions: MenuOption[] = [
 ];
 
 export function MainMenu({ userData, onNavigate }: MainMenuProps) {
+  const [character, setCharacter] = useState<any>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
+
+  // Load character data from Firestore
+  useEffect(() => {
+    const loadCharacter = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          setLoadingCharacter(false);
+          return;
+        }
+        const charDoc = await getDoc(doc(db, 'characters', user.uid));
+        if (charDoc.exists()) {
+          setCharacter(charDoc.data());
+        }
+      } catch (e) {
+        console.error('Erro ao carregar personagem:', e);
+      } finally {
+        setLoadingCharacter(false);
+      }
+    }
+    loadCharacter();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      onNavigate('auth');
+    } catch (e) {
+      console.error('Erro ao deslogar:', e);
+    }
+  };
+
   return (
     <div className="py-8">
       {/* Header */}
@@ -78,13 +119,34 @@ export function MainMenu({ userData, onNavigate }: MainMenuProps) {
         className="text-center mb-12"
       >
         <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-lg border-2 border-amber-200">
-            <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
-              <span className="text-3xl">{userData.avatar}</span>
+          <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-lg border-2 border-amber-200 justify-between w-full max-w-4xl">
+            <div className="flex items-center gap-4">
+              {!loadingCharacter && character ? (
+                <Avatar3D
+                  gender={character.gender}
+                  bodyType={character.bodyType}
+                  skinColor={character.skinColor}
+                  faceOption={character.faceOption}
+                  hairId={character.hairId}
+                  size={64}
+                />
+              ) : (
+                <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
+                  <span className="text-3xl">{userData.avatar}</span>
+                </div>
+              )}
+              <div className="text-left">
+                <p className="text-gray-600 text-sm">Bem-vindo(a),</p>
+                <h2 className="text-gray-800">{userData.name}</h2>
+              </div>
             </div>
-            <div className="text-left">
-              <p className="text-gray-600 text-sm">Bem-vindo(a),</p>
-              <h2 className="text-gray-800">{userData.name}</h2>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => onNavigate('profile')}>Perfil</Button>
+              <Button variant="destructive" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
             </div>
           </div>
         </div>

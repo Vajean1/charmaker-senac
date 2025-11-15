@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
@@ -6,6 +6,9 @@ import { DictionaryPopup } from './DictionaryPopup';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle, XCircle, Trophy } from 'lucide-react';
 import { UserData } from '../App';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import Avatar3D from './Avatar3D';
 
 type QuizGameProps = {
   userData: UserData;
@@ -276,6 +279,71 @@ export function QuizGame({ userData, onComplete }: QuizGameProps) {
   const [score, setScore] = useState(0);
   const [showDictionary, setShowDictionary] = useState(false);
   const [answered, setAnswered] = useState(false);
+  const [character, setCharacter] = useState<any>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
+  const [answers, setAnswers] = useState<Array<{ questionId: number; selected: number; correct: number; isCorrect: boolean }>>([]);
+
+  // Load character data from Firestore
+  useEffect(() => {
+    const loadCharacter = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          setLoadingCharacter(false);
+          return;
+        }
+        const charDoc = await getDoc(doc(db, 'characters', user.uid));
+        if (charDoc.exists()) {
+          setCharacter(charDoc.data());
+        }
+      } catch (e) {
+        console.error('Erro ao carregar personagem:', e);
+      } finally {
+        setLoadingCharacter(false);
+      }
+    }
+    loadCharacter();
+  }, []);
+
+  // Save quiz result to Firestore
+  const saveQuizResult = async (finalScore: number, allAnswers: typeof answers) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const quizResult = {
+        totalQuestions: questions.length,
+        correctAnswers: finalScore,
+        wrongAnswers: questions.length - finalScore,
+        percentage: Math.round((finalScore / questions.length) * 100),
+        answers: allAnswers,
+        completedAt: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+
+      // Save to users/{uid}/quizResults
+      const quizResultsRef = doc(db, 'users', user.uid, 'quizResults', `quiz_${Date.now()}`);
+      await setDoc(quizResultsRef, quizResult);
+
+      // Also update user document with latest quiz stats
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      const currentStats = userDoc.data()?.quizStats || { total: 0, correct: 0, wrong: 0 };
+
+      await setDoc(userRef, {
+        quizStats: {
+          total: currentStats.total + questions.length,
+          correct: currentStats.correct + finalScore,
+          wrong: currentStats.wrong + (questions.length - finalScore),
+          lastQuizDate: new Date().toISOString()
+        }
+      }, { merge: true });
+
+      console.log('Quiz result saved successfully!');
+    } catch (e) {
+      console.error('Erro ao salvar resultado do quiz:', e);
+    }
+  };
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;
   const question = questions[currentQuestion];
@@ -289,6 +357,14 @@ export function QuizGame({ userData, onComplete }: QuizGameProps) {
     if (isCorrect) {
       setScore(score + 1);
     }
+
+    // Store this answer
+    setAnswers([...answers, {
+      questionId: question.id,
+      selected: selectedAnswer,
+      correct: question.correctAnswer,
+      isCorrect: isCorrect
+    }]);
 
     setShowResult(true);
   };
@@ -306,6 +382,8 @@ export function QuizGame({ userData, onComplete }: QuizGameProps) {
         setCurrentQuestion(currentQuestion + 1);
       }
     } else {
+      // Save quiz result before completing
+      saveQuizResult(score, answers);
       onComplete(score);
     }
   };
@@ -328,9 +406,19 @@ export function QuizGame({ userData, onComplete }: QuizGameProps) {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">{userData.avatar}</span>
-                </div>
+                {!loadingCharacter && character ? (
+                  <Avatar3D
+                    gender={character.gender}
+                    bodyType={character.bodyType}
+                    skinColor={character.skinColor}
+                    faceOption={character.faceOption}
+                    hairId={character.hairId}
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">{userData.avatar}</span>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-800">
                     {userData.name}

@@ -3,6 +3,10 @@ import { Button } from './ui/button';
 import { Trophy, Star, Award, Heart, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserData } from '../App';
+import Avatar3D from './Avatar3D';
+import { useState, useEffect } from 'react';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 type ResultScreenProps = {
   userData: UserData;
@@ -13,7 +17,31 @@ type ResultScreenProps = {
 };
 
 export function ResultScreen({ userData, score, totalQuestions, onRestart, onContinue }: ResultScreenProps) {
+  const [character, setCharacter] = useState<any>(null);
+  const [loadingCharacter, setLoadingCharacter] = useState(true);
   const percentage = (score / totalQuestions) * 100;
+
+  // Load character data from Firestore
+  useEffect(() => {
+    const loadCharacter = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          setLoadingCharacter(false);
+          return;
+        }
+        const charDoc = await getDoc(doc(db, 'characters', user.uid));
+        if (charDoc.exists()) {
+          setCharacter(charDoc.data());
+        }
+      } catch (e) {
+        console.error('Erro ao carregar personagem:', e);
+      } finally {
+        setLoadingCharacter(false);
+      }
+    }
+    loadCharacter();
+  }, []);
   
   const getMessage = () => {
     if (percentage >= 90) {
@@ -90,9 +118,20 @@ export function ResultScreen({ userData, score, totalQuestions, onRestart, onCon
 
           {/* User Info */}
           <div className="flex items-center gap-3 mb-8 bg-white p-4 rounded-xl border-2 border-amber-200">
-            <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
-              <span className="text-3xl">{userData.avatar}</span>
-            </div>
+            {!loadingCharacter && character ? (
+              <Avatar3D
+                gender={character.gender}
+                bodyType={character.bodyType}
+                skinColor={character.skinColor}
+                faceOption={character.faceOption}
+                hairId={character.hairId}
+                size={64}
+              />
+            ) : (
+              <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
+                <span className="text-3xl">{userData.avatar}</span>
+              </div>
+            )}
             <div className="text-left">
               <p className="text-gray-800">
                 {userData.name}

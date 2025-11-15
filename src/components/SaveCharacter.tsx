@@ -27,15 +27,29 @@ export default function SaveButton({ gender, selectedBodyType, selectedSkinColor
     setSaving(true)
     try {
       const charRef = doc(db, 'characters', user.uid)
-      const payload = {
-        uid: user.uid,
-        gender,
-        bodyType: selectedBodyType,
-        skinColor: selectedSkinColor,
-        faceOption: selectedFaceOption,
-        hairId: selectedHair,
-        updatedAt: serverTimestamp()
-      }
+        // normalize skin code (e.g. 'skin1') to a readable racial tone string
+        const skinMap: Record<string, string> = {
+          skin1: 'preto',
+          skin2: 'pardo',
+          skin3: 'indigena',
+          skin4: 'amarelo',
+          skin5: 'branco'
+        }
+
+        const normalizedSkin = skinMap[selectedSkinColor] ?? String(selectedSkinColor)
+
+        const payload = {
+          uid: user.uid,
+          gender,
+          bodyType: selectedBodyType,
+          // Save normalized skin tone so admin statistics can read it reliably
+          skinColor: normalizedSkin,
+          // keep the original selection code for debugging if needed
+          skinCode: selectedSkinColor,
+          faceOption: selectedFaceOption,
+          hairId: selectedHair,
+          updatedAt: serverTimestamp()
+        }
 
       // Overwrite or create the character document for this user (ensures single character per user)
       await setDoc(charRef, payload, { merge: true })

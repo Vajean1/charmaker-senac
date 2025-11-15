@@ -1,0 +1,150 @@
+/* Styles specific to admin page; complements globals.css (Tailwind) */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--color-card);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tableWrapper {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: white;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.headerCard {
+  max-width: 100%;
+  margin: 0 auto;
+  background: linear-gradient(135deg, rgba(249, 250, 251, 0.5) 0%, rgba(255, 255, 255, 0.8) 100%);
+  border: 1px solid rgba(249, 115, 22, 0.1);
+}
+
+.loginForm {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .loginForm {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.loginInput {
+  width: 100%;
+  min-width: 0;
+}
+
+.loginButton {
+  white-space: nowrap;
+}
+
+.th {
+  background: linear-gradient(135deg, rgba(249, 250, 251, 0.9) 0%, rgba(243, 244, 246, 0.9) 100%);
+  text-align: left;
+  font-weight: 700;
+  color: #1f2937;
+  border-bottom: 2px solid rgba(209, 213, 219, 0.5);
+}
+
+.tr {
+  transition: background-color 0.2s ease;
+}
+
+.tr:hover {
+  background-color: rgba(249, 115, 22, 0.03);
+}
+
+.tr:nth-child(even) {
+  background: rgba(249, 250, 251, 0.6);
+}
+
+.td {
+  vertical-align: middle;
+}
+
+.modalOverlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modalBackdrop {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 1rem;
+  border: 1px solid rgba(249, 115, 22, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modalCardLarge {
+  width: 100%;
+  max-width: 900px;
+  border-radius: 1rem;
+  border: 1px solid rgba(249, 115, 22, 0.1);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Utility classes */
+.buttonPrimary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.buttonPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+.buttonGhost {
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.buttonGhost:hover {
+  background-color: rgba(249, 115, 22, 0.08);
+}
+
+/* Responsividade e espaçamento */
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem;
+  }
+
+  .table {
+    font-size: 0.85rem;
+  }
+
+  .th, .td {
+    padding: 0.75rem 0.5rem !important;
+  }
+
+  .modalCard, .modalCardLarge {
+    max-width: calc(100% - 1rem);
+  }
+}

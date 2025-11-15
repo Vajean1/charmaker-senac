@@ -16,6 +16,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomeFemale from './pages/homeFemale';
 import HomeMale from './pages/homeMale';
+import AdminPage from './pages/admin';
 
 export type UserData = {
   name: string;
@@ -226,6 +227,7 @@ export default function App() {
           path="/Male"
           element={React.createElement(HomeMale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quiz'); navigateTo('quiz'); } })}
         />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </Router>
   );

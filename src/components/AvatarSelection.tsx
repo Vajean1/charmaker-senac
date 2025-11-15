@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import styles from "./AvatarSelection.module.css";
 import { Sprout } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "./ui/dialog";
@@ -17,6 +17,7 @@ export function AvatarSelection({ userName, onComplete }: AvatarSelectionProps) 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleClick = (avatar: string) => {
     // marca visualmente, depois abre o modal de confirmação
@@ -32,9 +33,10 @@ export function AvatarSelection({ userName, onComplete }: AvatarSelectionProps) 
     setIsConfirming(true);
     setIsDialogOpen(false);
     if (avatar) {
-      // manter seleção visual (characterSelected) e depois navegar
+      // mostrar tela de loading imediatamente
+      setIsLoading(true);
+      // depois navegar para a página correspondente
       setTimeout(() => {
-        setIsConfirming(false);
         // navegar para a página correspondente
         if (avatar === 'female') navigate('/Female');
         if (avatar === 'male') navigate('/Male');
@@ -52,14 +54,31 @@ export function AvatarSelection({ userName, onComplete }: AvatarSelectionProps) 
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.logo}>
-        <div className="bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
-          <Sprout className="w-12 h-12 text-gray-900" />
+    <>
+      {/* Tela de Loading com imagem de fundo */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{
+          backgroundImage: 'url(/charmaker/LOADING.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}>
+          {/* Animação de carregamento no centro */}
+          <div className="flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 border-4 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+            <p className="text-white text-xl font-semibold drop-shadow-lg">Carregando...</p>
+          </div>
         </div>
-      </div>
-      <h2 className={styles.title}>Escolha seu Personagem</h2>
-      <div className={styles.buttonsWrapper}>
+      )}
+
+      <div className={styles.container}>
+        <div className={styles.logo}>
+          <div className="bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center">
+            <Sprout className="w-12 h-12 text-gray-900" />
+          </div>
+        </div>
+        <h2 className={styles.title}>Escolha seu Personagem</h2>
+        <div className={styles.buttonsWrapper}>
         {/* Botão Feminino */}
         <div
           className={styles.buttonContainer}
@@ -139,6 +158,7 @@ export function AvatarSelection({ userName, onComplete }: AvatarSelectionProps) 
           <DialogClose />
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </>
   );
 }

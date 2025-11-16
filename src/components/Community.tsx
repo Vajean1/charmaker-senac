@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -19,7 +19,6 @@ import {
 import { motion } from 'motion/react';
 import { UserData } from '../App';
 import Avatar3D from './Avatar3D';
-// import raw detox lists
 // @ts-ignore - Vite raw import
 import frasesTxt from '../detoxlinguistico/frases.txt?raw';
 // @ts-ignore - Vite raw import
@@ -62,6 +61,8 @@ type Comment = {
   };
   likes: number;
   likedBy: string[];
+  replyTo?: string; // Name of user being replied to
+  replyToId?: string; // ID of user being replied to
 };
 
 type Post = {
@@ -98,28 +99,23 @@ export function Community({ userData, onBack }: CommunityProps) {
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const [blockedViolation, setBlockedViolation] = useState<null | { matched: string; fullText: string; type: 'post' | 'comment'; postId?: string }>(null);
 
-  // Parse detox files into arrays
+  const [loadingComments, setLoadingComments] = useState<string[]>([]);
+  const [replyingTo, setReplyingTo] = useState<{ postId: string; commentId: string; author: string; authorId: string } | null>(null);
+
   const frasesList: string[] = (frasesTxt || '').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean) as string[];
   const palavrasList: string[] = (palavrasTxt || '').split(/\r?\n/).map((s: string) => s.trim()).filter(Boolean) as string[];
-
-  // Normalization helpers
   const removeDiacritics = (str: string) => str.normalize?.('NFD').replace(/[\u0300-\u036f]/g, '') || str;
   const normalize = (str: string) => removeDiacritics(str).toLowerCase();
-
   const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-
-  // Check text for forbidden words/phrases and report violation to Firestore if found.
+  
   const checkAndReport = async (text: string, type: 'post' | 'comment', postId?: string) => {
     if (!text || !text.trim()) return false;
     const normalizedText = normalize(text);
-
-    // Check phrases first (substring matches)
     for (const phrase of frasesList) {
       const normPhrase = normalize(phrase);
       if (!normPhrase) continue;
       if (normalizedText.includes(normPhrase)) {
         const matched = phrase;
-        // report to DB
         try {
           const user = auth.currentUser;
           await addDoc(collection(db, 'violations'), {
@@ -131,15 +127,11 @@ export function Community({ userData, onBack }: CommunityProps) {
             postId: postId || null,
             createdAt: Timestamp.now()
           });
-        } catch (e) {
-          console.error('Erro ao salvar violação:', e);
-        }
+        } catch (e) { console.error('Erro ao salvar violação:', e); }
         setBlockedViolation({ matched, fullText: text, type, postId });
         return true;
       }
     }
-
-    // Check words (whole word matches)
     for (const word of palavrasList) {
       const normWord = normalize(word);
       if (!normWord) continue;
@@ -157,18 +149,14 @@ export function Community({ userData, onBack }: CommunityProps) {
             postId: postId || null,
             createdAt: Timestamp.now()
           });
-        } catch (e) {
-          console.error('Erro ao salvar violação:', e);
-        }
+        } catch (e) { console.error('Erro ao salvar violação:', e); }
         setBlockedViolation({ matched, fullText: text, type, postId });
         return true;
       }
     }
-
     return false;
   };
 
-  // Formatar tempo relativo
   const formatRelativeTime = (timestamp: any) => {
     if (!timestamp) return 'agora';
     const date = timestamp.toDate?.() || new Date(timestamp);
@@ -177,7 +165,6 @@ export function Community({ userData, onBack }: CommunityProps) {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-
     if (diffMins < 1) return 'agora';
     if (diffMins < 60) return `há ${diffMins}m`;
     if (diffHours < 24) return `há ${diffHours}h`;
@@ -185,7 +172,6 @@ export function Community({ userData, onBack }: CommunityProps) {
     return date.toLocaleDateString('pt-BR');
   };
 
-  // Load character data from Firestore
   useEffect(() => {
     const loadCharacter = async () => {
       try {
@@ -207,7 +193,6 @@ export function Community({ userData, onBack }: CommunityProps) {
     loadCharacter();
   }, []);
 
-  // Carregar posts do Firestore
   useEffect(() => {
     const loadPosts = async () => {
       try {
@@ -217,38 +202,32 @@ export function Community({ userData, onBack }: CommunityProps) {
           orderBy('createdAt', 'desc')
         );
         const querySnapshot = await getDocs(postsQuery);
-        const loadedPosts: Post[] = [];
-
-        for (const docSnapshot of querySnapshot.docs) {
-          const postData = docSnapshot.data();
-          
-          // Carregar comentários
-          const commentsQuery = query(
-            collection(db, 'posts', docSnapshot.id, 'comments'),
-            orderBy('createdAt', 'desc')
-          );
-          const commentsSnapshot = await getDocs(commentsQuery);
-          const comments: Comment[] = commentsSnapshot.docs.map(commentDoc => ({
-            id: commentDoc.id,
-            ...commentDoc.data(),
-            createdAt: commentDoc.data().createdAt
-          })) as Comment[];
-
-          loadedPosts.push({
-            id: docSnapshot.id,
-            author: postData.author,
-            authorId: postData.authorId,
-            avatar: postData.avatar,
-            content: postData.content,
-            category: postData.category || 'Compartilhamento',
-            likes: postData.likes || 0,
-            likedBy: postData.likedBy || [],
-            comments: comments,
-            createdAt: postData.createdAt,
-            time: formatRelativeTime(postData.createdAt),
-            character: postData.character
-          });
-        }
+        
+        const loadedPosts: Post[] = await Promise.all(
+          querySnapshot.docs.map(async (docSnapshot) => {
+            const postData = docSnapshot.data();
+            
+            // Load comments count for each post
+            const commentsQuery = query(collection(db, 'posts', docSnapshot.id, 'comments'));
+            const commentsSnapshot = await getDocs(commentsQuery);
+            const commentsCount = commentsSnapshot.size;
+            
+            return {
+              id: docSnapshot.id,
+              author: postData.author,
+              authorId: postData.authorId,
+              avatar: postData.avatar,
+              content: postData.content,
+              category: postData.category || 'Compartilhamento',
+              likes: postData.likes || 0,
+              likedBy: postData.likedBy || [],
+              comments: new Array(commentsCount).fill(null).map(() => ({} as Comment)), // Placeholder comments to show count
+              createdAt: postData.createdAt,
+              time: formatRelativeTime(postData.createdAt),
+              character: postData.character
+            };
+          })
+        );
 
         setPosts(loadedPosts);
       } catch (e) {
@@ -261,17 +240,13 @@ export function Community({ userData, onBack }: CommunityProps) {
     loadPosts();
   }, []);
 
-  // Publicar novo post
   const handleSubmitPost = async () => {
     if (!newPost.trim()) return;
-    
     try {
-      // Check for forbidden words/phrases and report if any
       const blocked = await checkAndReport(newPost, 'post');
       if (blocked) return;
       const user = auth.currentUser;
       if (!user) return;
-
       const postId = `post_${Date.now()}`;
       const postData = {
         author: userData.name,
@@ -284,41 +259,31 @@ export function Community({ userData, onBack }: CommunityProps) {
         createdAt: Timestamp.now(),
         character: character
       };
-
       await setDoc(doc(db, 'posts', postId), postData);
-
-      // Atualizar UI imediatamente
       setPosts([
         {
           id: postId,
           ...postData,
-          comments: [],
+          comments: [], // New posts start with 0 comments
           time: 'agora'
         },
         ...posts
       ]);
-
       setNewPost('');
     } catch (e) {
       console.error('Erro ao publicar post:', e);
     }
   };
 
-  // Like/Unlike post
   const handleLike = async (postId: string) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
       const postRef = doc(db, 'posts', postId);
       const postData = posts.find(p => p.id === postId);
-      
       if (!postData) return;
-
       const isLiked = postData.likedBy.includes(user.uid);
-
       if (isLiked) {
-        // Unlike
         await updateDoc(postRef, {
           likes: increment(-1),
           likedBy: arrayRemove(user.uid)
@@ -329,7 +294,6 @@ export function Community({ userData, onBack }: CommunityProps) {
             : p
         ));
       } else {
-        // Like
         await updateDoc(postRef, {
           likes: increment(1),
           likedBy: arrayUnion(user.uid)
@@ -345,46 +309,25 @@ export function Community({ userData, onBack }: CommunityProps) {
     }
   };
 
-  // Deletar post (apenas autor pode deletar) - flow separado entre abrir modal e executar
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
-
-  // abre modal de confirmação
-  const confirmDeletePost = (postId: string) => {
-    setDeletingPostId(postId);
-  };
-
-  // cancelar exclusão
-  const cancelDelete = () => {
-    setDeletingPostId(null);
-  };
-
-  // executa exclusão depois da confirmação
+  const confirmDeletePost = (postId: string) => { setDeletingPostId(postId); };
+  const cancelDelete = () => { setDeletingPostId(null); };
   const performDeletePost = async (postId: string) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
       const post = posts.find(p => p.id === postId);
-      if (!post) return;
-
-      if (post.authorId !== user.uid) {
-        console.warn('Usuário não autorizado a deletar este post');
+      if (!post || post.authorId !== user.uid) {
         setDeletingPostId(null);
         return;
       }
-
-      // Deletar comentários primeiro
       const commentsSnap = await getDocs(collection(db, 'posts', postId, 'comments'));
       const deletePromises: Promise<any>[] = [];
       commentsSnap.forEach(cd => {
         deletePromises.push(deleteDoc(doc(db, 'posts', postId, 'comments', cd.id)));
       });
       await Promise.all(deletePromises);
-
-      // Deletar o post
       await deleteDoc(doc(db, 'posts', postId));
-
-      // Atualizar UI
       setPosts(prev => prev.filter(p => p.id !== postId));
       setDeletingPostId(null);
     } catch (e) {
@@ -393,30 +336,51 @@ export function Community({ userData, onBack }: CommunityProps) {
     }
   };
 
-  // Toggle comentários expandidos
-  const toggleComments = (postId: string) => {
-    setExpandedComments(prev =>
-      prev.includes(postId)
-        ? prev.filter(id => id !== postId)
-        : [...prev, postId]
-    );
+  const toggleComments = async (postId: string) => {
+    if (expandedComments.includes(postId)) {
+      setExpandedComments(prev => prev.filter(id => id !== postId));
+      return;
+    }
+
+    setLoadingComments(prev => [...prev, postId]);
+    try {
+      const post = posts.find(p => p.id === postId);
+      
+      // Always load comments when expanding, even if we have placeholders
+      if (post) {
+        const commentsQuery = query(
+          collection(db, 'posts', postId, 'comments'),
+          orderBy('createdAt', 'desc')
+        );
+        const commentsSnapshot = await getDocs(commentsQuery);
+        const comments: Comment[] = commentsSnapshot.docs.map(commentDoc => ({
+          id: commentDoc.id,
+          ...commentDoc.data(),
+        })) as Comment[];
+
+        setPosts(prevPosts => prevPosts.map(p => 
+          p.id === postId ? { ...p, comments: comments } : p
+        ));
+      }
+    } catch (e) {
+      console.error("Erro ao carregar comentários:", e);
+    } finally {
+      setLoadingComments(prev => prev.filter(id => id !== postId));
+    }
+
+    setExpandedComments(prev => [...prev, postId]);
   };
 
-  // Publicar comentário
   const handleSubmitComment = async (postId: string) => {
     const commentText = newComments[postId];
     if (!commentText?.trim()) return;
-
     try {
-      // Check for forbidden words/phrases and report if any
       const blocked = await checkAndReport(commentText, 'comment', postId);
       if (blocked) return;
-
       const user = auth.currentUser;
       if (!user) return;
-
       const commentId = `comment_${Date.now()}`;
-      const commentData = {
+      const commentData: any = {
         author: userData.name,
         authorId: user.uid,
         content: commentText,
@@ -426,12 +390,44 @@ export function Community({ userData, onBack }: CommunityProps) {
         character: character
       };
 
+      // Add reply info if replying to someone
+      let notificationRecipientId = null;
+      if (replyingTo && replyingTo.postId === postId) {
+        commentData.replyTo = replyingTo.author;
+        commentData.replyToId = replyingTo.authorId;
+        notificationRecipientId = replyingTo.authorId;
+      } else {
+        // If not replying, notify post author
+        const post = posts.find(p => p.id === postId);
+        if (post && post.authorId !== user.uid) {
+          notificationRecipientId = post.authorId;
+        }
+      }
+
       await setDoc(
         doc(db, 'posts', postId, 'comments', commentId),
         commentData
       );
 
-      // Atualizar UI
+      // Create notification for the recipient
+      if (notificationRecipientId && notificationRecipientId !== user.uid) {
+        const notificationData = {
+          type: replyingTo ? 'reply' : 'comment',
+          recipientId: notificationRecipientId,
+          senderId: user.uid,
+          senderName: userData.name,
+          senderAvatar: userData.avatar,
+          senderCharacter: character,
+          postId: postId,
+          commentId: commentId,
+          content: commentText.substring(0, 100),
+          read: false,
+          createdAt: Timestamp.now()
+        };
+        await addDoc(collection(db, 'notifications'), notificationData);
+      }
+      
+      // Update the post with the new comment
       setPosts(posts.map(p => 
         p.id === postId
           ? {
@@ -442,31 +438,27 @@ export function Community({ userData, onBack }: CommunityProps) {
                   ...commentData,
                   createdAt: commentData.createdAt
                 },
-                ...p.comments
+                ...p.comments.filter(c => c.id) // Keep only real comments (filter out placeholders)
               ]
             }
           : p
       ));
-
       setNewComments(prev => ({ ...prev, [postId]: '' }));
+      setReplyingTo(null); // Clear reply state
     } catch (e) {
       console.error('Erro ao comentar:', e);
     }
   };
 
-  // Like comentário
   const handleLikeComment = async (postId: string, commentId: string) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
       const post = posts.find(p => p.id === postId);
       const comment = post?.comments.find(c => c.id === commentId);
       if (!comment) return;
-
       const commentRef = doc(db, 'posts', postId, 'comments', commentId);
       const isLiked = comment.likedBy.includes(user.uid);
-
       if (isLiked) {
         await updateDoc(commentRef, {
           likes: increment(-1),
@@ -478,8 +470,6 @@ export function Community({ userData, onBack }: CommunityProps) {
           likedBy: arrayUnion(user.uid)
         });
       }
-
-      // Atualizar UI
       setPosts(posts.map(p =>
         p.id === postId
           ? {
@@ -505,7 +495,6 @@ export function Community({ userData, onBack }: CommunityProps) {
 
   return (
     <div className="py-8">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="w-5 h-5" />
@@ -514,13 +503,12 @@ export function Community({ userData, onBack }: CommunityProps) {
           <h1 className="text-purple-800">Comunidade</h1>
           <p className="text-gray-600">Compartilhe experiências e aprenda com outras pessoas</p>
         </div>
-        {/* Delete confirmation modal */}
+        
         {deletingPostId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black/60 z-40"
               onClick={cancelDelete}
-              // inline style to ensure backdrop blur works even if Tailwind's utility isn't available
               style={{
                 backdropFilter: 'blur(6px)',
                 WebkitBackdropFilter: 'blur(6px)'
@@ -536,7 +524,7 @@ export function Community({ userData, onBack }: CommunityProps) {
             </Card>
           </div>
         )}
-          {/* Blocked content modal (detected forbidden word/phrase) */}
+          
           {blockedViolation && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
@@ -562,9 +550,9 @@ export function Community({ userData, onBack }: CommunityProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
+        
         <div className="lg:col-span-2 space-y-6">
-          {/* Create Post */}
+          
           <Card className="p-6">
             <div className="flex gap-4">
               {!loadingCharacter && character ? (
@@ -597,7 +585,7 @@ export function Community({ userData, onBack }: CommunityProps) {
             </div>
           </Card>
 
-          {/* Tabs */}
+          
           <div className="flex gap-2">
             <Button
               variant={activeTab === 'recent' ? 'default' : 'outline'}
@@ -617,7 +605,7 @@ export function Community({ userData, onBack }: CommunityProps) {
             </Button>
           </div>
 
-          {/* Posts Feed */}
+          
           <div className="space-y-4">
             {loadingPosts ? (
               <div className="text-center py-8 text-gray-600">Carregando posts...</div>
@@ -632,7 +620,7 @@ export function Community({ userData, onBack }: CommunityProps) {
                   transition={{ delay: index * 0.1 }}
                 >
                   <Card className="p-6 hover:shadow-lg transition-shadow">
-                    {/* Post Header */}
+                    
                     <div className="flex items-start gap-4 mb-4">
                         {post.character ? (
                         <Avatar3D
@@ -660,10 +648,10 @@ export function Community({ userData, onBack }: CommunityProps) {
                       </div>
                     </div>
 
-                    {/* Post Content */}
+                    
                     <p className="text-gray-700 mb-4">{post.content}</p>
 
-                    {/* Post Actions */}
+                    
                     <div className="flex items-center gap-6 pt-4 border-t">
                       <button
                         onClick={() => handleLike(post.id)}
@@ -698,10 +686,10 @@ export function Community({ userData, onBack }: CommunityProps) {
                       )}
                     </div>
 
-                    {/* Comments Section */}
+                    
                     {expandedComments.includes(post.id) && (
                       <div className="mt-6 pt-6 border-t space-y-4">
-                        {/* Add Comment */}
+                        
                         <div className="flex gap-4">
                           {character ? (
                             <Avatar3D
@@ -719,10 +707,21 @@ export function Community({ userData, onBack }: CommunityProps) {
                             </div>
                           )}
                           <div className="flex-grow">
+                            {replyingTo && replyingTo.postId === post.id && (
+                              <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
+                                <span>Respondendo a <span className="font-semibold text-purple-600">@{replyingTo.author}</span></span>
+                                <button
+                                  onClick={() => setReplyingTo(null)}
+                                  className="text-gray-400 hover:text-gray-600"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <input
                                 type="text"
-                                placeholder="Escreva um comentário..."
+                                placeholder={replyingTo && replyingTo.postId === post.id ? `Respondendo @${replyingTo.author}...` : "Escreva um comentário..."}
                                 value={newComments[post.id] || ''}
                                 onChange={(e) =>
                                   setNewComments(prev => ({
@@ -743,8 +742,14 @@ export function Community({ userData, onBack }: CommunityProps) {
                           </div>
                         </div>
 
-                        {/* Comments List */}
-                        {post.comments.length > 0 && (
+                        
+                        {loadingComments.includes(post.id) ? (
+                          
+                          <div className="text-center py-4 text-gray-500 text-sm">
+                            Carregando comentários...
+                          </div>
+                        ) : post.comments.length > 0 && post.comments[0].id ? (
+                          
                           <div className="space-y-4 mt-4">
                             {post.comments.map((comment) => (
                               <div key={comment.id} className="flex gap-3 pl-2 border-l-2 border-gray-200">
@@ -768,21 +773,51 @@ export function Community({ userData, onBack }: CommunityProps) {
                                     <p className="text-gray-800 text-sm font-semibold">{comment.author}</p>
                                     <p className="text-gray-500 text-xs">{formatRelativeTime(comment.createdAt)}</p>
                                   </div>
-                                  <p className="text-gray-700 text-sm mb-2">{comment.content}</p>
-                                  <button
-                                    onClick={() => handleLikeComment(post.id, comment.id)}
-                                    className={`flex items-center gap-1 text-xs transition-colors ${
-                                      comment.likedBy.includes(auth.currentUser?.uid || '')
-                                        ? 'text-rose-600'
-                                        : 'text-gray-600 hover:text-rose-600'
-                                    }`}
-                                  >
-                                    <Heart className={`w-3 h-3 ${comment.likedBy.includes(auth.currentUser?.uid || '') ? 'fill-current' : ''}`} />
-                                    <span>{comment.likes > 0 ? comment.likes : ''}</span>
-                                  </button>
+                                  <p className="text-gray-700 text-sm mb-2">
+                                    {comment.replyTo && (
+                                      <span className="text-purple-600 font-semibold mr-1">
+                                        @{comment.replyTo}
+                                      </span>
+                                    )}
+                                    {comment.content}
+                                  </p>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={() => handleLikeComment(post.id, comment.id)}
+                                      className={`flex items-center gap-1 text-xs transition-colors ${
+                                        comment.likedBy.includes(auth.currentUser?.uid || '')
+                                          ? 'text-rose-600'
+                                          : 'text-gray-600 hover:text-rose-600'
+                                      }`}
+                                    >
+                                      <Heart className={`w-3 h-3 ${comment.likedBy.includes(auth.currentUser?.uid || '') ? 'fill-current' : ''}`} />
+                                      <span>{comment.likes > 0 ? comment.likes : ''}</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setReplyingTo({
+                                          postId: post.id,
+                                          commentId: comment.id,
+                                          author: comment.author,
+                                          authorId: comment.authorId
+                                        });
+                                        // Focus on input
+                                        const input = document.querySelector(`input[placeholder*="comentário"]`) as HTMLInputElement;
+                                        input?.focus();
+                                      }}
+                                      className="text-xs text-gray-600 hover:text-purple-600 transition-colors font-semibold"
+                                    >
+                                      Responder
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        ) : (
+                          
+                          <div className="text-center py-4 text-gray-500 text-sm">
+                            Nenhum comentário ainda.
                           </div>
                         )}
                       </div>
@@ -794,9 +829,9 @@ export function Community({ userData, onBack }: CommunityProps) {
           </div>
         </div>
 
-        {/* Sidebar */}
+        
         <div className="space-y-6">
-          {/* Community Guidelines */}
+          
           <Card className="p-6">
             <h3 className="text-purple-800 mb-4">Diretrizes da Comunidade</h3>
             <ul className="space-y-3 text-sm text-gray-600">
@@ -819,7 +854,7 @@ export function Community({ userData, onBack }: CommunityProps) {
             </ul>
           </Card>
 
-          {/* Topics */}
+          
           <Card className="p-6">
             <h3 className="text-purple-800 mb-4">Tópicos Populares</h3>
             <div className="flex flex-wrap gap-2">
@@ -834,7 +869,7 @@ export function Community({ userData, onBack }: CommunityProps) {
             </div>
           </Card>
 
-          {/* Stats */}
+          
           <Card className="p-6 bg-gradient-to-br from-purple-50 to-blue-50">
             <h3 className="text-purple-800 mb-4">Nossa Comunidade</h3>
             <div className="space-y-3">

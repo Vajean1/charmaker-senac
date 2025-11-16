@@ -16,7 +16,7 @@ html,body,#root{
   justify-content:center;
   padding:20px;
   height:100vh;
-  background: linear-gradient(180deg, #f0f3f8 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #051f4d 0%, var(--bg) 100%);
   box-sizing:border-box;
 }
 
@@ -24,7 +24,7 @@ html,body,#root{
   flex:1 1 auto;
   width: calc(100% - 40px);
   margin: 0 auto;
-  background: var(--card-bg);
+  background: transparent;
   border-radius:12px;
   box-shadow:0 8px 30px rgba(16,24,40,0.08);
   overflow:hidden;
@@ -75,7 +75,7 @@ html,body,#root{
 .btn-save {
   /* Warm "dourado" text on solid black background — intuitive and prominent */
   background: #0b0b0b !important; /* near-black */
-  color: #f5c24a !important; /* warm golden-yellow */
+  color: #a3a19a !important; /* warm golden-yellow */
   padding: 16px 32px !important; /* increased vertical padding for text fit */
   min-width: 140px; /* ensure minimum button width */
   min-height: 48px; /* professional button height */
@@ -326,7 +326,7 @@ html,body,#root{
   width:24px;
   height:24px;
   object-fit:contain;
-}
+} 
 .overlay-top .img-button:hover{ background: rgba(2,6,23,0.04); border-color: rgba(2,6,23,0.12); }
 
 /* Preset position arrows */
@@ -334,7 +334,7 @@ html,body,#root{
   position: absolute;
   margin-top: 200px;
   /* Center the preset arrows both horizontally and vertically */
-  top: 50%;
+  top: 20%;
   left: 50%;
   transform: translate(-50%, -50%);
   display:flex;
@@ -344,7 +344,7 @@ html,body,#root{
 .preset-arrows button{
   /* Keep large touch target, but remove visible chrome (transparent background, no border/shadow)
      so the PNG icon feels floating — the glow will be applied to the image itself on hover */
-  width: 156px;
+  width: 100px;
   height: 156px;
   border-radius:10px;
   border: none;
@@ -378,8 +378,8 @@ html,body,#root{
   bottom:22px;
   left:50%;
   transform:translateX(-50%);
-  background: rgba(255,255,255,0.95);
-  padding:16px 20px;
+  background:#09224f;
+  padding: 12px;
   border-radius:12px;
   box-shadow:0 8px 30px rgba(16,24,40,0.08);
   z-index:10;
@@ -401,13 +401,16 @@ html,body,#root{
   padding: 16px;
   border-radius: 12px;
   border: 1px solid rgba(2,6,23,0.06);
-  background: white;
+  background: #283e66;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 15px;
-  color: #1f2937;
+  color: #f0f0f0;
 }
 
+.section-card svg{
+  color: white;
+}
 .section-card:hover {
   background: rgba(37,99,235,0.04);
   border-color: rgba(37,99,235,0.1);
@@ -419,7 +422,8 @@ html,body,#root{
 
 /* Section Options View */
 .section-options {
-  background: white;
+  background: #051f4d;
+  color: white;
   border-radius: 12px;
   padding: 16px;
   width: 100%;
@@ -427,6 +431,7 @@ html,body,#root{
 
 .section-header {
   display: flex;
+  color: white;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
@@ -438,7 +443,7 @@ html,body,#root{
   gap: 8px;
   margin: 0;
   font-size: 15px;
-  color: #1f2937;
+  color: #ffffff;
 }
 
 /* Subsection styles */
@@ -463,8 +468,8 @@ html,body,#root{
 /* New nested card styles */
 .main-sections-grid{
   display:flex;
+  width: 100%;
   gap:12px;
-  flex-direction:column;
 }
 
 .subsections-grid{
@@ -480,7 +485,7 @@ html,body,#root{
   padding:12px;
   border-radius:10px;
   border:1px solid rgba(2,6,23,0.06);
-  background:white;
+  background: #283e66;
   cursor:pointer;
 }
 
@@ -489,11 +494,11 @@ html,body,#root{
   flex-direction:column;
   align-items:flex-start;
 }
-.subsection-title{ font-size:14px; color:#1f2937; }
+.subsection-title{ font-size:14px; color:#ededed; }
 .subsection-count{ font-size:12px; color:#6b7280 }
 
 .options-card{
-  background:white;
+  background:#051f4d;
   border-radius:12px;
   padding:12px;
   border:1px solid rgba(2,6,23,0.04);
@@ -501,14 +506,19 @@ html,body,#root{
 
 .options-card-header{ margin-bottom:8px }
 
-.options-grid-wrap{ display:flex; flex-wrap:wrap; gap:8px }
+.options-grid-wrap{ 
+  display:flex; 
+  flex-wrap:wrap;
+   gap:8px
+   }
 
 .back-button{
-  width:36px;
-  height:36px;
+  width:22px;
+  height:28px;
+  font-size: 25px;
   border-radius:8px;
   border:1px solid rgba(2,6,23,0.06);
-  background:white;
+  background:#051f4d;
   cursor:pointer;
   display:flex;
   align-items:center;
@@ -534,18 +544,18 @@ html,body,#root{
 }
 
 .options-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .option-button {
-  width: 100%;
+  width: 25%;
   aspect-ratio: 1;
   border-radius: 8px;
   border: 1px solid rgba(2,6,23,0.06);
-  background: white;
+  background: #283e66;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
@@ -557,9 +567,9 @@ html,body,#root{
 }
 
 .option-button.active {
-  background: rgba(37,99,235,0.1);
-  border-color: rgba(37,99,235,0.2);
-  color: #2563eb;
+  background: rgba(39, 40, 42, 0.1);
+  border-color: rgba(173, 178, 202, 0.8);
+  color: white;
 }
 
 .reset-button {
@@ -596,7 +606,7 @@ html,body,#root{
 
 /* Mobile / small-screen adjustments: make the 3D viewer card take the full mobile viewport
    (target device ~412x915). Remove card chrome (no border-radius, no shadow, full width/height). */
-@media (max-width: 420px) {
+@media (max-width: 820px) {
   .home-page {
     padding: 0;
     height: 100vh;
@@ -635,23 +645,47 @@ html,body,#root{
 
   .preset-arrows {
     margin-top: 500px;
-    top: 70px; /* Slightly closer to top on mobile */
+    top: 4%; /* Slightly closer to top on mobile */
   }
 
   .overlay-bottom{
-    bottom: 12px;
+    bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(255,255,255,0.95);
     padding: 12px;
-    border-radius: 12px;
+    background-color: #09224f ;
+    border-radius: 12px 12px 0 0;
     box-shadow: 0 4px 20px rgba(16,24,40,0.12);
-    width: auto;
-    max-width: calc(100% - 24px);
+    display: flex;
+    width: 100%;
   }
 
   .hair-sections{
     align-items: center;
-    min-width: 240px; /* Slightly smaller on mobile */
+    width: 100%;
   }
 }
+
+
+@media screen and (max-width:400px) {
+  .preset-arrows{
+  position: absolute;
+  margin-top: 200px;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+}
+}
+
+@media screen and (max-width:376px) {
+  .preset-arrows{
+  position: absolute;
+  margin-top: 200px;
+  top: 15%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+}
+}
+

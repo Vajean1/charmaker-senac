@@ -3,7 +3,10 @@ import { AuthForm } from './components/AuthForm';
 import { ProfileForm } from './components/ProfileForm';
 import { AvatarSelection } from './components/AvatarSelection';
 import { QuizGame } from './components/QuizGame';
+import { QuizGamePhaseOne } from './components/QuizGamePhaseOne';
+import { QuizGamePhaseTwo } from './components/QuizGamePhaseTwo';
 import { ResultScreen } from './components/ResultScreen';
+import { ResultScreenPhaseTwo } from './components/ResultScreenPhaseTwo';
 import { MainMenu } from './components/MainMenu';
 import { Community } from './components/Community';
 import { Library } from './components/Library';
@@ -25,86 +28,80 @@ export type UserData = {
   email?: string;
 };
 
-export type GameStep = 'auth' | 'profile' | 'avatar' | 'quiz' | 'result' | 'menu' | 'community' | 'library' | 'locals' | 'stories' | 'support';
+export type GameStep = 'auth' | 'profile' | 'avatar' | 'quizPhaseOne' | 'quizPhaseTwo' | 'quiz' | 'result' | 'resultPhaseTwo' | 'menu' | 'community' | 'library' | 'locals' | 'stories' | 'support';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState<GameStep>('auth');
   const [userData, setUserData] = useState<UserData>({ name: '', age: 0, avatar: '', email: '' });
   const [score, setScore] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(15);
+  const [phaseTwoScore, setPhaseTwoScore] = useState(0);
+  const [totalAccumulatedScore, setTotalAccumulatedScore] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
 
   // Monitorar mudanças de autenticação
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUserId(currentUser.uid);
-        setUserData((prev) => ({ ...prev, email: currentUser.email || '' }));
-        setIsUserAuthenticated(true);
+  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    if (currentUser) {
+      setUserId(currentUser.uid);
+      setUserData((prev) => ({ ...prev, email: currentUser.email || '' }));
+      setIsUserAuthenticated(true);
 
-        // Buscar dados do perfil no Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          const charDoc = await getDoc(doc(db, 'characters', currentUser.uid));
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid)
+        const charDocRef = doc(db, 'characters', currentUser.uid)
+
+        const [userDoc, charDoc] = await Promise.all([
+          getDoc(userDocRef),
+          getDoc(charDocRef)
+        ]);
+        
+        if (userDoc.exists()) {
+          const userDataFromDB = userDoc.data(); 
+          setUserData((prev) => ({
+            ...prev,
+            name: userDataFromDB.name || '',
+            age: userDataFromDB.age || 0,
+            email: currentUser.email || '',
+          }));
           
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
+          if (charDoc.exists()) {
+            const charData = charDoc.data();
             setUserData((prev) => ({
               ...prev,
-              name: userData.name || '',
-              age: userData.age || 0,
-              email: currentUser.email || '',
+              avatar: `${charData.gender}-${charData.hairId}`,
             }));
-            
-            // Se já tem personagem criado, verificar se já respondeu o quiz
-            if (charDoc.exists()) {
-              const charData = charDoc.data();
-              setUserData((prev) => ({
-                ...prev,
-                avatar: `${charData.gender}-${charData.hairId}`,
-              }));
 
-              // Verificar se o usuário já respondeu o quiz
-              try {
-                const quizResultsRef = await getDoc(
-                  doc(db, 'users', currentUser.uid)
-                );
-                const hasCompletedQuiz = quizResultsRef.data()?.quizStats?.lastQuizDate;
+            const hasCompletedQuiz = userDataFromDB?.quizStats?.lastQuizDate;
+            const hasCompletedPhaseOne = userDataFromDB?.quizStats?.phaseOneCompleted;
 
-                if (hasCompletedQuiz) {
-                  // Já respondeu o quiz, vai direto para o menu
-                  setCurrentStep('menu');
-                } else {
-                  // Ainda não respondeu, vai para o quiz
-                  setCurrentStep('quiz');
-                }
-              } catch (quizError) {
-                console.error('Erro ao verificar quiz:', quizError);
-                // Em caso de erro, vai para o quiz
-                setCurrentStep('quiz');
-              }
+            if (hasCompletedQuiz) {
+              setCurrentStep('menu');
+            } else if (hasCompletedPhaseOne) {
+              setCurrentStep('menu');
             } else {
-              // Se tem perfil mas sem personagem, vai para seleção de avatar
-              setCurrentStep('avatar');
+              setCurrentStep('quizPhaseOne');
             }
           } else {
-            // Se não tem perfil, mostra o formulário
-            setCurrentStep('profile');
+            setCurrentStep('avatar');
           }
-        } catch (error) {
-          console.error('Erro ao buscar dados do usuário:', error);
-          // Em caso de erro, mostra o formulário
+        } else {
           setCurrentStep('profile');
         }
-      } else {
-        setIsUserAuthenticated(false);
-        setCurrentStep('auth');
-        setUserId(null);
+      } catch (error) {
+        console.error('Erro ao buscar dados do usuário:', error);
+        setCurrentStep('profile');
       }
-    });
+    } else {
+      setIsUserAuthenticated(false);
+      setCurrentStep('auth');
+      setUserId(null);
+    }
+  });
 
-    return unsubscribe;
-  }, []);
+  return unsubscribe;
+}, []);
 
   const handleAuthComplete = (userId: string) => {
     setUserId(userId);
@@ -118,11 +115,26 @@ export default function App() {
 
   const handleAvatarComplete = (avatar: string) => {
     setUserData({ ...userData, avatar });
-    setCurrentStep('quiz');
+    setCurrentStep('quizPhaseOne');
   };
 
-  const handleQuizComplete = (finalScore: number) => {
+  const handlePhaseOneComplete = () => {
+    setCurrentStep('menu');
+  };
+
+  const handlePhaseTwoComplete = (totalScore: number, phaseTwoScore: number, phaseTwoQuestions: number) => {
+    // totalScore is the accumulated score (Phase 1 + Phase 2)
+    // phaseTwoScore is only the Phase 2 score (0-12)
+    // phaseTwoQuestions is the number of Phase 2 questions (12)
+    setTotalAccumulatedScore(totalScore);
+    setPhaseTwoScore(phaseTwoScore);
+    setTotalQuestions(phaseTwoQuestions); // This will be 12
+    setCurrentStep('resultPhaseTwo');
+  };
+
+  const handleQuizComplete = (finalScore: number, total: number = 15) => {
     setScore(finalScore);
+    setTotalQuestions(total);
     setCurrentStep('result');
   };
 
@@ -138,27 +150,31 @@ export default function App() {
     setUserId(null);
   };
 
-  const navigateTo = (step: GameStep) => {
-    // Bloquear tentativa de navegar para quiz se já foi respondido
-    if (step === 'quiz') {
-      // Verificar se o usuário já respondeu o quiz
-      const userDocRef = doc(db, 'users', userId || '');
-      getDoc(userDocRef).then((userDoc) => {
-        const hasCompletedQuiz = userDoc.data()?.quizStats?.lastQuizDate;
-        if (hasCompletedQuiz) {
-          console.warn('Usuário já respondeu o quiz. Acesso bloqueado.');
-          return; // Bloqueia o acesso
-        } else {
-          setCurrentStep(step);
-        }
-      }).catch((error) => {
-        console.error('Erro ao verificar quiz:', error);
+
+const navigateTo = (step: GameStep, options?: { force?: boolean }) => {
+  const forceNavigation = options?.force || false;
+
+  // Bloquear tentativa de navegar para quiz se já foi respondido
+  if (step === 'quiz' && !forceNavigation) { 
+    // Verificar se o usuário já respondeu o quiz
+    const userDocRef = doc(db, 'users', userId || '');
+    getDoc(userDocRef).then((userDoc) => {
+      const hasCompletedQuiz = userDoc.data()?.quizStats?.lastQuizDate;
+      if (hasCompletedQuiz) {
+        console.warn('Usuário já respondeu o quiz. Acesso bloqueado.');
+        return; // Bloqueia o acesso
+      } else {
         setCurrentStep(step);
-      });
-    } else {
+      }
+    }).catch((error) => {
+      console.error('Erro ao verificar quiz:', error);
       setCurrentStep(step);
-    }
-  };
+    });
+  } else {
+
+    setCurrentStep(step);
+  }
+};
 
   // Keep the existing app UI as the root element for the default route
   const appMain = (
@@ -173,15 +189,42 @@ export default function App() {
         {currentStep === 'avatar' && (
           <AvatarSelection userName={userData.name} onComplete={handleAvatarComplete} />
         )}
-        {currentStep === 'quiz' && (
-          <QuizGame userData={userData} onComplete={handleQuizComplete} />
+        {currentStep === 'quizPhaseOne' && userId && (
+          <QuizGamePhaseOne 
+            userId={userId}
+            userData={userData} 
+            onComplete={handlePhaseOneComplete} 
+          />
+        )}
+        {currentStep === 'quizPhaseTwo' && userId && (
+          <QuizGamePhaseTwo 
+            userId={userId}
+            userData={userData} 
+            onComplete={handlePhaseTwoComplete} 
+          />
+        )}
+        {currentStep === 'quiz' && userId && ( // Adicionada verificação '&& userId', aumentar segurança.
+          <QuizGame 
+            userId={userId}
+            userData={userData} 
+            onComplete={handleQuizComplete} 
+          />
         )}
         {currentStep === 'result' && (
           <ResultScreen 
             userData={userData} 
             score={score} 
-            totalQuestions={15}
+            totalQuestions={totalQuestions}
             onRestart={handleRestart}
+            onContinue={handleResultContinue}
+          />
+        )}
+        {currentStep === 'resultPhaseTwo' && (
+          <ResultScreenPhaseTwo 
+            userData={userData} 
+            phaseTwoScore={phaseTwoScore} 
+            totalPhaseTwoQuestions={totalQuestions}
+            totalAccumulatedScore={totalAccumulatedScore}
             onContinue={handleResultContinue}
           />
         )}
@@ -213,19 +256,19 @@ export default function App() {
         <Route path="/" element={appMain} />
         <Route
           path="/home-female"
-          element={React.createElement(HomeFemale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quiz'); navigateTo('quiz'); } })}
+          element={React.createElement(HomeFemale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quizPhaseOne'); navigateTo('quizPhaseOne'); } })}
         />
         <Route
           path="/Female"
-          element={React.createElement(HomeFemale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quiz'); navigateTo('quiz'); } })}
+          element={React.createElement(HomeFemale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quizPhaseOne'); navigateTo('quizPhaseOne'); } })}
         />
         <Route
           path="/home-male"
-          element={React.createElement(HomeMale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quiz'); navigateTo('quiz'); } })}
+          element={React.createElement(HomeMale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quizPhaseOne'); navigateTo('quizPhaseOne'); } })}
         />
         <Route
           path="/Male"
-          element={React.createElement(HomeMale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quiz'); navigateTo('quiz'); } })}
+          element={React.createElement(HomeMale as any, { onDone: (data: { avatar?: string }) => { if (data?.avatar) setUserData(prev => ({ ...prev, avatar: data.avatar as string })); setCurrentStep('quizPhaseOne'); navigateTo('quizPhaseOne'); } })}
         />
         <Route path="/admin" element={<AdminPage />} />
       </Routes>

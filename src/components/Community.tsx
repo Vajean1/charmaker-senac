@@ -23,6 +23,7 @@ import Avatar3D from './Avatar3D';
 import frasesTxt from '../detoxlinguistico/frases.txt?raw';
 // @ts-ignore - Vite raw import
 import palavrasTxt from '../detoxlinguistico/palavras.txt?raw';
+import styles from './ViolationModal.module.css';
 import { auth, db } from '../firebase/firebase';
 import { 
   doc, 
@@ -98,6 +99,7 @@ export function Community({ userData, onBack }: CommunityProps) {
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({});
   const [blockedViolation, setBlockedViolation] = useState<null | { matched: string; fullText: string; type: 'post' | 'comment'; postId?: string }>(null);
+  const [visiblePostsCount, setVisiblePostsCount] = useState(5);
 
   const [loadingComments, setLoadingComments] = useState<string[]>([]);
   const [replyingTo, setReplyingTo] = useState<{ postId: string; commentId: string; author: string; authorId: string } | null>(null);
@@ -526,25 +528,90 @@ export function Community({ userData, onBack }: CommunityProps) {
         )}
           
           {blockedViolation && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-black/70 z-40"
-                onClick={() => setBlockedViolation(null)}
-                style={{
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)'
-                }}
-              />
-              <Card className="z-50 p-6 w-full max-w-md">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Publicação bloqueada</h3>
-                <p className="text-sm text-gray-600 mb-4">Bloqueamos sua {blockedViolation.type === 'post' ? 'publicação' : 'comentário'} pelo seguinte motivo:</p>
-                <p className="mb-4"><span className="text-red-600 font-semibold">{blockedViolation.matched}</span></p>
-                <p className="text-sm text-gray-500 mb-4">Texto enviado:</p>
-                <div className="p-3 bg-gray-50 rounded text-sm text-gray-700 mb-4">{blockedViolation.fullText}</div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setBlockedViolation(null)}>Fechar</Button>
+            <div className={styles.overlay} onClick={() => setBlockedViolation(null)}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: "spring", duration: 0.5 }}
+                className={styles.modalContainer}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={styles.card}>
+                  {/* Header com gradiente */}
+                  <div className={styles.header}>
+                    <button
+                      onClick={() => setBlockedViolation(null)}
+                      className={styles.closeButton}
+                      aria-label="Fechar"
+                    >
+                      ✕
+                    </button>
+                    <div className={styles.headerContent}>
+                      <div className={styles.iconCircle}>
+                        <span>⚠️</span>
+                      </div>
+                      <div>
+                        <h3 className={styles.title}>Conteúdo Bloqueado</h3>
+                        <p className={styles.subtitle}>Violação das Diretrizes da Comunidade</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo */}
+                  <div className={styles.content}>
+                    <div className={styles.section}>
+                      <p className={styles.sectionText}>
+                        Sua {blockedViolation.type === 'post' ? 'publicação' : 'resposta'} foi bloqueada por conter conteúdo inadequado:
+                      </p>
+                      <div className={styles.matchedBox}>
+                        <p className={styles.matchedText}>"{blockedViolation.matched}"</p>
+                      </div>
+                    </div>
+
+                    <div className={styles.section}>
+                      <p className={styles.sectionLabel}>Texto Original:</p>
+                      <div className={styles.textBox}>
+                        <p className={styles.textContent}>{blockedViolation.fullText}</p>
+                      </div>
+                    </div>
+
+                    {/* Diretrizes */}
+                    <div className={styles.guidelines}>
+                      <p className={styles.guidelinesTitle}>💡 Lembre-se:</p>
+                      <ul className={styles.guidelinesList}>
+                        <li>Respeite todas as pessoas</li>
+                        <li>Evite linguagem ofensiva ou discriminatória</li>
+                        <li>Promova um ambiente acolhedor</li>
+                      </ul>
+                    </div>
+
+                    {/* GIF de aviso com destaque */}
+                    <div className={styles.gifContainer}>
+                      <div className={styles.gifWrapper}>
+                        <div className={styles.gifGlow}></div>
+                        <div className={styles.gifBackground}>
+                          <img 
+                            src="/charmaker/aruanawarning.gif" 
+                            alt="Aviso" 
+                            className={styles.gifImage}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botão */}
+                    <div className={styles.buttonContainer}>
+                      <button
+                        onClick={() => setBlockedViolation(null)}
+                        className={styles.confirmButton}
+                      >
+                        Entendi, vou revisar meu texto
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </Card>
+              </motion.div>
             </div>
           )}
       </div>
@@ -608,17 +675,25 @@ export function Community({ userData, onBack }: CommunityProps) {
           
           <div className="space-y-4">
             {loadingPosts ? (
-              <div className="text-center py-8 text-gray-600">Carregando posts...</div>
+              <div className="flex flex-col items-center justify-center py-12">
+                <img 
+                  src="/charmaker/amandarunning.gif" 
+                  alt="Carregando..." 
+                  className="w-32 h-32 object-contain"
+                />
+                <p className="text-purple-600 font-semibold mt-4">Carregando posts...</p>
+              </div>
             ) : posts.length === 0 ? (
               <div className="text-center py-8 text-gray-600">Nenhum post ainda. Seja o primeiro a compartilhar!</div>
             ) : (
-              posts.map((post, index) => (
-                <motion.div
-                  key={post.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
+              <>
+                {posts.slice(0, visiblePostsCount).map((post, index) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
                   <Card className="p-6 hover:shadow-lg transition-shadow">
                     
                     <div className="flex items-start gap-4 mb-4">
@@ -745,8 +820,13 @@ export function Community({ userData, onBack }: CommunityProps) {
                         
                         {loadingComments.includes(post.id) ? (
                           
-                          <div className="text-center py-4 text-gray-500 text-sm">
-                            Carregando comentários...
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <img 
+                              src="/charmaker/amandarunning.gif" 
+                              alt="Carregando comentários..." 
+                              className="w-24 h-24 object-contain"
+                            />
+                            <p className="text-purple-600 font-semibold text-sm mt-2">Carregando comentários...</p>
                           </div>
                         ) : post.comments.length > 0 && post.comments[0].id ? (
                           
@@ -824,7 +904,25 @@ export function Community({ userData, onBack }: CommunityProps) {
                     )}
                   </Card>
                 </motion.div>
-              ))
+                ))}
+                
+                {visiblePostsCount < posts.length && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex justify-center pt-6"
+                  >
+                    <Button
+                      variant="outline"
+                      onClick={() => setVisiblePostsCount(prev => prev + 5)}
+                      className="px-8 py-6 text-lg font-semibold border-2 border-purple-500 hover:bg-purple-50 hover:border-purple-600 transition-all"
+                    >
+                      <ChevronDown className="w-5 h-5 mr-2" />
+                      Ver Mais Posts ({posts.length - visiblePostsCount} restantes)
+                    </Button>
+                  </motion.div>
+                )}
+              </>
             )}
           </div>
         </div>

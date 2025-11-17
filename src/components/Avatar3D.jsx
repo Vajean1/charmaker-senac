@@ -7,6 +7,140 @@ import * as SkeletonUtilsModule from 'three/examples/jsm/utils/SkeletonUtils'
 const SkeletonUtils = SkeletonUtilsModule?.SkeletonUtils || SkeletonUtilsModule?.default || SkeletonUtilsModule
 import ErrorBoundary from './ErrorBoundary'
 
+// ============================================
+// SISTEMA DE CACHE PROFISSIONAL
+// ============================================
+
+// Cache global para GLTFs carregados - evita recarregar os mesmos modelos
+const gltfCache = new Map()
+
+// Cache global para texturas - compartilha texturas entre instâncias
+const textureCache = new Map()
+
+// Fila de carregamento para evitar sobrecarga
+const loadQueue = []
+let isProcessingQueue = false
+const MAX_CONCURRENT_LOADS = 3
+
+// Função para carregar GLTF com cache
+const loadGLTFWithCache = async (url) => {
+  // Verifica se já está no cache
+  if (gltfCache.has(url)) {
+    return gltfCache.get(url)
+  }
+
+  // Se não está no cache, carrega
+  const promise = new Promise((resolve, reject) => {
+    loadQueue.push({ url, resolve, reject, type: 'gltf' })
+  })
+
+  processQueue()
+  return promise
+}
+
+// Função para carregar textura com cache
+const loadTextureWithCache = async (url) => {
+  // Verifica se já está no cache
+  if (textureCache.has(url)) {
+    return textureCache.get(url).clone()
+  }
+
+  // Se não está no cache, carrega
+  const promise = new Promise((resolve, reject) => {
+    loadQueue.push({ url, resolve, reject, type: 'texture' })
+  })
+
+  processQueue()
+  return promise
+}
+
+// Processa fila de carregamento de forma controlada
+const processQueue = () => {
+  if (isProcessingQueue) return
+  isProcessingQueue = true
+
+  const processNext = () => {
+    if (loadQueue.length === 0) {
+      isProcessingQueue = false
+      return
+    }
+
+    const batch = loadQueue.splice(0, MAX_CONCURRENT_LOADS)
+    const promises = batch.map(item => {
+      if (item.type === 'gltf') {
+        return new Promise((resolve, reject) => {
+          useGLTF.preload(item.url)
+          const gltf = useGLTF(item.url)
+          if (gltf && gltf.scene) {
+            gltfCache.set(item.url, gltf)
+            item.resolve(gltf)
+            resolve()
+          } else {
+            item.reject(new Error('Failed to load GLTF'))
+            reject()
+          }
+        })
+      } else if (item.type === 'texture') {
+        return new Promise((resolve, reject) => {
+          const loader = new THREE.TextureLoader()
+          loader.load(
+            item.url,
+            (texture) => {
+              // Configura textura
+              texture.flipY = false
+              texture.encoding = THREE.sRGBEncoding
+              texture.colorSpace = THREE.SRGBColorSpace
+              texture.minFilter = THREE.LinearFilter
+              texture.magFilter = THREE.LinearFilter
+              texture.generateMipmaps = true
+              
+              textureCache.set(item.url, texture)
+              item.resolve(texture.clone())
+              resolve()
+            },
+            undefined,
+            (error) => {
+              item.reject(error)
+              reject(error)
+            }
+          )
+        })
+      }
+    })
+
+    Promise.allSettled(promises).then(() => {
+      setTimeout(processNext, 50) // Pequeno delay entre batches
+    })
+  }
+
+  processNext()
+}
+
+// Preload de recursos comuns para melhorar performance inicial
+const preloadCommonResources = () => {
+  const commonPaths = [
+    '/models/female/GBody_0.glb',
+    '/models/male/MBody_0.glb',
+    '/models/female/TEXTURES/PRETO/CORPO_PRETO/PRETO.png',
+    '/models/male/TEXTURES/PRETO/CORPO_PRETO/PRETO.png'
+  ]
+
+  commonPaths.forEach(path => {
+    if (path.endsWith('.glb')) {
+      useGLTF.preload(path)
+    }
+  })
+}
+
+// Executar preload ao carregar o módulo
+if (typeof window !== 'undefined') {
+  setTimeout(preloadCommonResources, 100)
+}
+
+// ============================================
+// COMPONENTE DE AVATAR
+// ============================================
+
 // Small Avatar Preview Component
 function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instanceId }) {
   const basePath = gender === 'female' ? '/models/female' : '/models/male'
@@ -155,10 +289,9 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
   }
 
   // Pre-carrega todas as texturas (corpo e rosto) - setup igual a homeMale/homeFemale
-  // CADA INSTÂNCIA TEM SEU PRÓPRIO CACHE DE TEXTURAS
+  // USANDO CACHE GLOBAL COMPARTILHADO PARA EVITAR RECARREGAMENTO
   const { skinTextures, faceTexture } = useMemo(() => {
     const textures = {}
-    const loader = new THREE.TextureLoader()
     
     // Função para configurar a textura - EXATAMENTE IGUAL A homeMale/homeFemale
     const setupTexture = (texture) => {
@@ -171,14 +304,21 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
       return texture
     }
 
-    // Carrega texturas do corpo - COM CACHE ISOLADO POR INSTÂNCIA
+    // Carrega texturas do corpo - USANDO CACHE GLOBAL
     Object.entries(skinTextureMap).forEach(([key, path]) => {
-      // Adiciona instanceId à URL para forçar carregamento separado
-      const uniquePath = `${path}?instance=${instanceId}`
-      textures[key] = setupTexture(loader.load(path))
+      // Verifica cache primeiro
+      if (textureCache.has(path)) {
+        textures[key] = textureCache.get(path).clone()
+      } else {
+        // Carrega e adiciona ao cache
+        const loader = new THREE.TextureLoader()
+        const texture = setupTexture(loader.load(path))
+        textureCache.set(path, texture)
+        textures[key] = texture.clone()
+      }
     })
 
-    // Carrega textura inicial do rosto - COM CACHE ISOLADO
+    // Carrega textura inicial do rosto - USANDO CACHE GLOBAL
     const faceTexturePath = (() => {
       const selectedSkinFolder = skinIdToFolderName[skinCode]
       const faceTextureName = faceTypeToTextureName[faceOption]
@@ -186,9 +326,15 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
       return `${basePath}/TEXTURES/${selectedSkinFolder}/ROSTO/${faceTextureName}${textureSuffix}.png`
     })()
 
-    const initialFaceTexture = setupTexture(
-      loader.load(faceTexturePath)
-    )
+    let initialFaceTexture
+    if (textureCache.has(faceTexturePath)) {
+      initialFaceTexture = textureCache.get(faceTexturePath).clone()
+    } else {
+      const loader = new THREE.TextureLoader()
+      initialFaceTexture = setupTexture(loader.load(faceTexturePath))
+      textureCache.set(faceTexturePath, initialFaceTexture)
+      initialFaceTexture = initialFaceTexture.clone()
+    }
 
     return {
       skinTextures: textures,
@@ -204,7 +350,6 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
 
   // Atualiza a textura do rosto quando mudar a seleção do rosto ou cor da pele
   const currentFaceTexture = useMemo(() => {
-    const loader = new THREE.TextureLoader()
     const setupTexture = (texture) => {
       texture.flipY = false
       texture.encoding = THREE.sRGBEncoding
@@ -220,7 +365,15 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
     const textureSuffix = skinTypeToTextureId[selectedSkinFolder]
     const faceTexturePath = `${basePath}/TEXTURES/${selectedSkinFolder}/ROSTO/${faceTextureName}${textureSuffix}.png`
     
-    return setupTexture(loader.load(faceTexturePath))
+    // Usa cache se disponível
+    if (textureCache.has(faceTexturePath)) {
+      return textureCache.get(faceTexturePath).clone()
+    }
+    
+    const loader = new THREE.TextureLoader()
+    const texture = setupTexture(loader.load(faceTexturePath))
+    textureCache.set(faceTexturePath, texture)
+    return texture.clone()
   }, [faceOption, skinCode, basePath])
 
   // Effect para atualizar as texturas quando mudar a seleção - MESMO SISTEMA DE homeMale/homeFemale

@@ -367,6 +367,34 @@ function Home({ onDone }) {
   const [selectedSkinColor, setSelectedSkinColor] = useState('skin3') // Default to 'Indigena'
   const [selectedFaceOption, setSelectedFaceOption] = useState('face3') // Default to A3 (Indigena)
   
+  // Estado para controlar modal de cor de pele
+  const [activeSkinModal, setActiveSkinModal] = useState(null)
+  const [shownSkinModals, setShownSkinModals] = useState(new Set()) // Rastreia quais modais já foram exibidos
+
+  // Conteúdo informativo para cada cor de pele
+  const skinColorInfo = {
+    skin1: {
+      title: '🧑🏿 Pele Preta',
+      description: 'A pele preta representa a rica ancestralidade africana presente na cultura brasileira. Caracteriza-se por tons de melanina mais intensos, que oferecem proteção natural contra os raios solares.'
+    },
+    skin2: {
+      title: '🧑🏽 Pele Parda',
+      description: 'A pele parda reflete a miscigenação brasileira, resultado da mistura entre diferentes etnias. Apresenta tons intermediários de melanina, sendo a tonalidade mais comum no Brasil.'
+    },
+    skin3: {
+      title: '🧑🏾 Pele Indígena',
+      description: 'A pele indígena representa os povos originários do Brasil. Caracteriza-se por tons naturalmente bronzeados, adaptados ao clima tropical e à vida em harmonia com a natureza.'
+    },
+    skin4: {
+      title: '🧑🏻 Pele Amarela',
+      description: 'A pele amarela representa a herança asiática na diversidade brasileira. Caracteriza-se por tons suaves e quentes, refletindo a imigração asiática que enriqueceu nossa cultura.'
+    },
+    skin5: {
+      title: '🧑🏼 Pele Branca',
+      description: 'A pele branca reflete a influência europeia na formação do povo brasileiro. Apresenta menor concentração de melanina e requer maior proteção solar.'
+    }
+  }
+  
   // Load saved character for current user (if any) to initialize the editor
   useEffect(() => {
     let mounted = true
@@ -390,6 +418,22 @@ function Home({ onDone }) {
     loadSavedCharacter()
     return () => { mounted = false }
   }, [])
+
+  // Fechar modal de cor de pele
+  const closeSkinModal = () => {
+    setActiveSkinModal(null)
+  }
+
+  // Mostrar modal quando abrir a subseção de Cor da Pele (apenas uma vez por cor)
+  useEffect(() => {
+    if (selectedSection === 'body' && selectedSubSection === 'skinColor' && selectedSkinColor) {
+      // Só mostra se ainda não foi exibido para esta cor
+      if (!shownSkinModals.has(selectedSkinColor)) {
+        setActiveSkinModal(selectedSkinColor)
+        setShownSkinModals(prev => new Set([...prev, selectedSkinColor]))
+      }
+    }
+  }, [selectedSection, selectedSubSection, selectedSkinColor, shownSkinModals])
   
   // Função para gerar o caminho da textura do rosto baseado na seleção atual
   const getFaceTexturePath = (faceOption, skinColor) => {
@@ -945,6 +989,19 @@ function Home({ onDone }) {
           </div>
         </div>
       </div>
+
+      {/* Modal flutuante de informação sobre cor de pele */}
+      {activeSkinModal && skinColorInfo[activeSkinModal] && (
+        <div className="skin-modal-overlay">
+          <div className="skin-modal-bubble">
+            <button className="skin-modal-close" onClick={closeSkinModal}>
+              <IoMdClose size={20} />
+            </button>
+            <h3>{skinColorInfo[activeSkinModal].title}</h3>
+            <p>{skinColorInfo[activeSkinModal].description}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

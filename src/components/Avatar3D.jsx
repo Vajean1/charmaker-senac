@@ -2,27 +2,93 @@ import React, { Suspense, useMemo, useEffect, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { useGLTF, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-
-// CORREÇÃO 2025: SkeletonUtils foi removido → importamos apenas a função clone
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
-
 import ErrorBoundary from './ErrorBoundary'
 
 // ============================================
-// SISTEMA DE CACHE PROFISSIONAL (mantido igual)
+// 🎨 MAPEAMENTO DE TEXTURAS CORRETO
 // ============================================
 
-const gltfCache = new Map()
-const textureCache = new Map()
+// Mapeamento de skinColor (skin1-5) para nome da pasta de textura
+const SKIN_FOLDER_MAP = {
+  skin1: 'PRETO',
+  skin2: 'PARDO',
+  skin3: 'INDIGENA',
+  skin4: 'AMARELO',
+  skin5: 'BRANCO',
+  // Fallback para nomes diretos (caso venha normalizado do Firestore)
+  preto: 'PRETO',
+  pardo: 'PARDO',
+  indigena: 'INDIGENA',
+  amarelo: 'AMARELO',
+  branco: 'BRANCO'
+}
 
-const loadQueue = []
-let isProcessingQueue = false
-const MAX_CONCURRENT_LOADS = 3
+// Mapeamento de skinColor para sufixo da textura do rosto
+const SKIN_SUFFIX_MAP = {
+  'PRETO': '_0',
+  'AMARELO': '_1',
+  'BRANCO': '_2',
+  'PARDO': '_3',
+  'INDIGENA': '_4'
+}
 
-// ... (todo o seu sistema de cache permanece exatamente igual)
-// (vou manter só o que é necessário para o componente funcionar)
+// Mapeamento de faceOption para nome base do arquivo da textura
+const FACE_NAME_MAP = {
+  face1: 'PRETO',
+  face2: 'PARDO',
+  face3: 'INDIGENA',
+  face4: 'AMARELO',
+  face5: 'BRANCO'
+}
 
-// Preload comum (mantido)
+// Mapeamento de hairId para caminho do modelo GLB
+const HAIR_MODELS = {
+  // Básicos
+  1: { female: 'GHair_0.glb', male: 'MHair_0.glb' },
+  2: { female: 'GHair_1.glb', male: 'MHair_1.glb' },
+  3: { female: 'GHair_2.glb', male: 'MHair_2.glb' },
+  
+  // Culturais
+  4: { female: 'Hair(FEMALE)/Cultural/Cultural_0.glb', male: 'hair(MALE)/Cultural/Cultural_0.glb' },
+  5: { female: 'Hair(FEMALE)/Cultural/Cultural_1.glb', male: 'hair(MALE)/Cultural/Cultural_1.glb' },
+  6: { female: 'Hair(FEMALE)/Cultural/Cultural_2.glb', male: 'hair(MALE)/Cultural/Cultural_2.glb' },
+  7: { female: 'Hair(FEMALE)/Cultural/Cultural_3.glb', male: 'hair(MALE)/Cultural/Cultural_3.glb' },
+  13: { female: 'Hair(FEMALE)/Cultural/Cultural_4.glb', male: 'hair(MALE)/Cultural/Cultural_4.glb' },
+
+  // Cacheado
+  8: { female: 'Hair(FEMALE)/Cacheado/Cacheado_0.glb', male: 'hair(MALE)/Cacheado/Cacheado_0.glb' },
+  9: { female: 'Hair(FEMALE)/Cacheado/Cacheado_1.glb', male: 'hair(MALE)/Cacheado/Cacheado_1.glb' },
+
+  // Crespo
+  10: { female: 'Hair(FEMALE)/Crespo/Crespo_0.glb', male: 'hair(MALE)/Crespo/Crespo_0.glb' },
+  11: { female: 'Hair(FEMALE)/Crespo/Crespo_1.glb', male: 'hair(MALE)/Crespo/Crespo_1.glb' },
+
+  // Liso Extra
+  12: { female: 'Hair(FEMALE)/Liso/Liso_0.glb', male: 'hair(MALE)/Liso/Liso_0.glb' },
+
+  // Ondulado
+  14: { female: 'Hair(FEMALE)/Ondulado/Ondulado_0.glb', male: 'hair(MALE)/Ondulado/Ondulado_0.glb' },
+  15: { female: 'Hair(FEMALE)/Ondulado/Ondulado_1.glb', male: 'hair(MALE)/Ondulado/Ondulado_1.glb' },
+  16: { female: 'Hair(FEMALE)/Ondulado/Ondulado_2.glb', male: 'hair(MALE)/Ondulado/Ondulado_2.glb' }
+}
+
+// ============================================
+// 🧹 UTILITÁRIOS
+// ============================================
+
+function cleanMaterial(material) {
+  if (!material) return
+  material.dispose()
+  const textures = ['map', 'lightMap', 'bumpMap', 'normalMap', 'specularMap', 'envMap']
+  textures.forEach(key => {
+    if (material[key]) {
+      material[key].dispose()
+    }
+  })
+}
+
+// Preload de recursos comuns
 const preloadCommonResources = () => {
   const commonPaths = [
     '/models/female/GBody_0.glb',
@@ -35,7 +101,7 @@ if (typeof window !== 'undefined') {
 }
 
 // ============================================
-// COMPONENTE DE AVATAR
+// 🧍 COMPONENTE DE AVATAR
 // ============================================
 
 function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instanceId }) {
@@ -43,35 +109,30 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
   const bodyPrefix = gender === 'female' ? 'GBody' : 'MBody'
   const facePrefix = gender === 'female' ? 'GFace' : 'MFace'
 
+  // Índices dos modelos
   const bodyIndex = bodyType === 'body2' ? 1 : (bodyType === 'body3' ? 2 : 0)
-  const faceIndex = bodyIndex
+  const faceIndex = bodyIndex // Face segue o body
 
+  // Caminhos dos modelos GLB
   const bodyPath = `${basePath}/${bodyPrefix}_${bodyIndex}.glb?inst=${instanceId}`
   const facePath = `${basePath}/${facePrefix}_${faceIndex}.glb?inst=${instanceId}`
+  
+  // Caminho do cabelo
+  const hairConfig = HAIR_MODELS[hairId]
+  const hairPath = hairConfig 
+    ? `${basePath}/${hairConfig[gender]}?inst=${instanceId}`
+    : `${basePath}/${gender === 'female' ? 'GHair_0.glb' : 'MHair_0.glb'}?inst=${instanceId}`
 
+  // Carregamento dos modelos
   const body = useGLTF(bodyPath)
   const face = useGLTF(facePath)
-
-  const getHairPath = (id) => {
-    // ... (seu código de cabelo mantido 100% igual)
-    const hairFolder = gender === 'female' ? 'Hair(FEMALE)' : 'hair(MALE)'
-    let hairBasePath = `${basePath}/${gender === 'female' ? 'GHair' : 'MHair'}_0.glb`
-    // (mantive sua lógica completa aqui – não alterei nada)
-    // ... (todo o seu switch de cabelo)
-    if (id >= 1 && id <= 3) hairBasePath = `${basePath}/${gender === 'female' ? 'GHair' : 'MHair'}_${id - 1}.glb`
-    // ... resto igual
-    return `${hairBasePath}?inst=${instanceId}`
-  }
-
-  const hairPath = getHairPath(hairId)
   const hair = useGLTF(hairPath)
 
-  // CLONE CORRETO USANDO A FUNÇÃO `clone` DO THREE.JS MODERNO
+  // Clonagem dos modelos
   const bodyClone = useMemo(() => {
     if (!body?.scene) return null
-    const cloned = clone(body.scene)  // ← AQUI ESTÁ A MÁGICA
+    const cloned = clone(body.scene)
     cloned.userData._instanceId = instanceId
-    cloned.userData.textureCache = new Map()
     return cloned
   }, [body, instanceId])
 
@@ -79,7 +140,6 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
     if (!face?.scene) return null
     const cloned = clone(face.scene)
     cloned.userData._instanceId = instanceId
-    cloned.userData.textureCache = new Map()
     return cloned
   }, [face, instanceId])
 
@@ -87,15 +147,85 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
     if (!hair?.scene) return null
     const cloned = clone(hair.scene)
     cloned.userData._instanceId = instanceId
-    cloned.userData.textureCache = new Map()
     return cloned
   }, [hair, instanceId])
 
-  // TODO O RESTO DO SEU CÓDIGO DE TEXTURAS, SKIN, FACE, ETC.
-  // (mantive 100% igual – só pulei aqui por economia de espaço)
-  // ... seu código de texturas, skinCode, useEffect de materiais, etc.
+  // ============================================
+  // 🎨 APLICAÇÃO DE TEXTURAS
+  // ============================================
 
-  // (Cole aqui o resto do seu código original de texturas e useEffect – não precisa mudar nada nele)
+  useEffect(() => {
+    if (!bodyClone || !faceClone) return
+
+    // Normalização da cor da pele
+    const skinFolder = SKIN_FOLDER_MAP[skinColor] || SKIN_FOLDER_MAP[skinColor?.toLowerCase()] || 'PARDO'
+    
+    // Textura do corpo: /models/{gender}/TEXTURES/{skinFolder}/CORPO_{skinFolder}/{skinFolder}.png
+    const bodyTexturePath = `${basePath}/TEXTURES/${skinFolder}/CORPO_${skinFolder}/${skinFolder}.png`
+    
+    // Textura do rosto: LÓGICA CORRETA
+    // Pasta = Cor da Pele (skinFolder)
+    // Nome do arquivo = Face escolhida (faceOption)
+    // Sufixo = Cor da Pele (skinFolder)
+    // Exemplo: skin2(PARDO) + face2(PARDO) = /TEXTURES/PARDO/ROSTO/PARDO_3.png
+    const faceName = FACE_NAME_MAP[faceOption] || 'PRETO'
+    const suffix = SKIN_SUFFIX_MAP[skinFolder] || '_0'
+    const faceTexturePath = `${basePath}/TEXTURES/${skinFolder}/ROSTO/${faceName}${suffix}.png`
+
+    const textureLoader = new THREE.TextureLoader()
+    const loadedTextures = []
+
+    // Aplicar textura no corpo
+    bodyClone.traverse((child) => {
+      if (child.isMesh && child.material) {
+        textureLoader.load(
+          bodyTexturePath,
+          (texture) => {
+            texture.flipY = false
+            texture.colorSpace = THREE.SRGBColorSpace
+            
+            const newMaterial = child.material.clone()
+            newMaterial.map = texture
+            newMaterial.needsUpdate = true
+            
+            cleanMaterial(child.material)
+            child.material = newMaterial
+            loadedTextures.push(texture)
+          },
+          undefined,
+          (error) => console.warn(`Erro ao carregar textura do corpo (${bodyTexturePath}):`, error)
+        )
+      }
+    })
+
+    // Aplicar textura no rosto
+    faceClone.traverse((child) => {
+      if (child.isMesh && child.material) {
+        textureLoader.load(
+          faceTexturePath,
+          (texture) => {
+            texture.flipY = false
+            texture.colorSpace = THREE.SRGBColorSpace
+            
+            const newMaterial = child.material.clone()
+            newMaterial.map = texture
+            newMaterial.needsUpdate = true
+            
+            cleanMaterial(child.material)
+            child.material = newMaterial
+            loadedTextures.push(texture)
+          },
+          undefined,
+          (error) => console.warn(`Erro ao carregar textura do rosto (${faceTexturePath}):`, error)
+        )
+      }
+    })
+
+    // Cleanup
+    return () => {
+      loadedTextures.forEach(tex => tex.dispose())
+    }
+  }, [bodyClone, faceClone, skinColor, faceOption, basePath])
 
   return (
     <>
@@ -106,20 +236,33 @@ function AvatarPreview({ gender, bodyType, skinColor, faceOption, hairId, instan
   )
 }
 
-// CameraController e Avatar3D permanecem IGUAIS
+// ============================================
+// 📷 CONTROLE DE CÂMERA
+// ============================================
+
 function CameraController({ cameraDistance }) {
   const { camera } = useThree()
+  
   useEffect(() => {
     camera.near = 0.001
     camera.far = 1000
     camera.position.z = cameraDistance
     camera.updateProjectionMatrix()
   }, [camera, cameraDistance])
+  
   return null
 }
 
+// ============================================
+// 🎭 COMPONENTE PRINCIPAL
+// ============================================
+
 export default function Avatar3D({ 
-  gender, bodyType, skinColor, faceOption, hairId, 
+  gender, 
+  bodyType, 
+  skinColor, 
+  faceOption, 
+  hairId, 
   size = 48, 
   bgGradient = 'linear-gradient(135deg, #FFD700 0%, #FF9800 50%, #FF8C00 100%)' 
 }) {
@@ -148,7 +291,18 @@ export default function Avatar3D({
       background: bgGradient 
     }}>
       <ErrorBoundary>
-        <Suspense fallback={<div style={{width:'100%',height:'100%',background:'#1f2937',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#6b7280',fontSize:'10px'}}>Loading</span></div>}>
+        <Suspense fallback={
+          <div style={{
+            width: '100%', 
+            height: '100%', 
+            background: '#1f2937', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center'
+          }}>
+            <span style={{ color: '#6b7280', fontSize: '10px' }}>Carregando...</span>
+          </div>
+        }>
           <Canvas
             key={avatarKey}
             style={{ width: '100%', height: '100%' }}
@@ -158,7 +312,11 @@ export default function Avatar3D({
             <CameraController cameraDistance={modelPresets.cameraDistance} />
             <ambientLight intensity={1.2} />
             <directionalLight position={[5, 5, 5]} intensity={1} />
-            <group position={modelPresets.position} rotation={modelPresets.rotation} scale={modelPresets.scale}>
+            <group 
+              position={modelPresets.position} 
+              rotation={modelPresets.rotation} 
+              scale={modelPresets.scale}
+            >
               <AvatarPreview
                 gender={gender}
                 bodyType={bodyType}

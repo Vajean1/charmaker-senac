@@ -110,12 +110,12 @@ const Index: React.FC = () => {
   const slideTitles = [
     'Existência e Resistência',
     'Nossa Luta tem Voz',
-    'Denúncie o Racismo',
+    'Denuncie o Racismo',
     'Conheça nossa<br /><span class="left-align">Equipe</span>',
     'Você não está só',
     'Sua Vida Existe',
     'Acesse nossa<br />Comunidade',
-    'Nosssa Ancestralidade Vive',
+    'Nossa Ancestralidade Vive',
     'Juntos por um Mundo Melhor'
   ];
 
@@ -218,10 +218,10 @@ const Index: React.FC = () => {
           <div className="universidades-text">
             <h2>Do Senac para o mundo</h2>
             <p>
-              Somos o Plataforma e Vivências Raízes, um projeto criado por alunos e educadores do SENAC Pernambuco com a missão de promover reconhecimento, reflexão e pertencimento racial por meio da tecnologia, cultura e educação. Nossa iniciativa nasce como um convite à escuta, à expressão e ao diálogo, valorizando as diversas identidades que compõem a sociedade brasileira.
+              Somos a Plataforma e Vivências Raízes, um projeto criado por alunos e educadores do SENAC Pernambuco com a missão de promover reconhecimento, reflexão e pertencimento racial por meio da tecnologia, cultura e educação. Nossa iniciativa nasce como um convite à escuta, à expressão e ao diálogo, valorizando as diversas identidades que compõem a sociedade brasileira.
             </p>
             <p>
-              Acreditamos que o reconhecimento racial vai além da informação é vivência, é conexão, é olhar para si e para o outro com consciência e respeito. Por isso, unimos experiências digitais e presenciais para criar uma jornada transformadora durante a Semana da Consciência Racial.
+              Acreditamos que o reconhecimento racial vai além da informação e vivência, é conexão, é olhar para si e para o outro com consciência e respeito. Por isso, unimos experiências digitais e presenciais para criar uma jornada transformadora durante a Semana da Consciência Racial.
             </p>
             <p>
               Na Plataforma Raízes, utilizamos gamificação e conteúdos acessíveis para incentivar a reflexão sobre identidade, diversidade, miscigenação e racismo estrutural. Já nas Vivências Raízes, ampliamos o diálogo para o ambiente físico, celebrando histórias, expressões culturais, arte, ancestralidade e protagonismo racial por meio de oficinas, rodas de conversa, apresentações e espaços de fala.

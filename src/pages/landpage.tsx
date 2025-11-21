@@ -191,17 +191,23 @@ const Index: React.FC = () => {
           <div className="universidades-text">
             <h2>Do Senac para o mundo</h2>
             <p>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus
-              imperdiet metus sed lorem mollis, a hendrerit justo posuere.
-              Pellentesque accumsan, nulla quis maximus pulvinar, dolor nunc
-              facilisis ipsum, eget feugiat turpis lacus non odio. Donec tempor
-              massa eget tincidunt luctus. Vivamus id convallis sapien. Sed sed
-              sollicitudin massa.
+              Somos o Plataforma e Vivências Raízes, um projeto criado por alunos e educadores do SENAC Pernambuco com a missão de promover reconhecimento, reflexão e pertencimento racial por meio da tecnologia, cultura e educação. Nossa iniciativa nasce como um convite à escuta, à expressão e ao diálogo, valorizando as diversas identidades que compõem a sociedade brasileira.
             </p>
             <p>
-              Aliquam erat volutpat. Aenean fermentum turpis nec vestibulum
-              rhoncus. Proin ultrices velit ut tincidunt elementum. In vel enim
-              eget lacus pharetra accumsan eget vel libero.
+              Acreditamos que o reconhecimento racial vai além da informação é vivência, é conexão, é olhar para si e para o outro com consciência e respeito. Por isso, unimos experiências digitais e presenciais para criar uma jornada transformadora durante a Semana da Consciência Racial.
+            </p>
+            <p>
+              Na Plataforma Raízes, utilizamos gamificação e conteúdos acessíveis para incentivar a reflexão sobre identidade, diversidade, miscigenação e racismo estrutural. Já nas Vivências Raízes, ampliamos o diálogo para o ambiente físico, celebrando histórias, expressões culturais, arte, ancestralidade e protagonismo racial por meio de oficinas, rodas de conversa, apresentações e espaços de fala.
+            </p>
+            <p>
+              Nosso propósito é fortalecer o senso de pertencimento, estimular o protagonismo estudantil e integrar práticas educativas e culturais de forma dinâmica e inclusiva. Mais do que isso, buscamos inspirar outras unidades do SENAC a replicarem esse movimento, contribuindo para uma educação que reconhece e valoriza a diversidade racial.
+            </p>
+            <p>
+              Somos um projeto colaborativo, construído por pessoas que acreditam em uma sociedade mais justa, consciente e plural. Nosso trabalho reforça os compromissos da instituição com os Objetivos de Desenvolvimento Sustentável, especialmente Educação de Qualidade, Redução das Desigualdades e Paz e Instituições Eficazes.
+            </p>
+            <p>
+              Plataforma e Vivências Raízes não é apenas um evento é um movimento.
+              Um espaço de transformação, escuta e celebração das raízes que fortalecem nossa identidade coletiva.
             </p>
           </div>
           <div className="universidades-img">

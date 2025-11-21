@@ -114,6 +114,6 @@ Além das atividades presenciais, o projeto também apresenta sua **identidade v
 
 **Acesso:** Evento gratuito e aberto ao público
 
-**Contato institucional:** (81) 3413.6666 / 6728 / 6729 / 6730
+**Contato institucional:** (81) 988033826 (Instrutor Elvio Luiz) / (81) 988879611 (Coordenadora Mere Coutinho), (81) 988037501 (Estudante)
 
 ---

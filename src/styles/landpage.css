@@ -9,6 +9,7 @@
   --landpage-yellow: #f8b400;
   --landpage-green: #1fa447;
   --landpage-red: #e7323e;
+  --landpage-purple: #8b5cf6;
   --landpage-text-dark: #1a1a1a;
   --landpage-text-light: #666;
   --landpage-bg-light: #f9f9f9;
@@ -272,12 +273,10 @@
   height: 300px;
   background: white;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 16px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
   transition: all 0.4s ease;
+  overflow: hidden;
 }
 
 .landpage-wrapper .equipe-card:hover {
@@ -291,25 +290,37 @@
   background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%);
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* Cores abaixo dos quadrados */
 .landpage-wrapper .equipe-cor {
   position: absolute;
-  bottom: -50px;
-  width: 180px;
-  height: 70px;
-  border-radius: 8px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 80px;
+  border-radius: 0 0 16px 16px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(5px);
+  z-index: 2;
 }
 
 /* Garantir a alternância das cores nas 4 posições */
 .landpage-wrapper .equipe-card:nth-child(1) .equipe-cor {
-  background: var(--landpage-blue);
+  background: var(--landpage-yellow);
 }
 
 .landpage-wrapper .equipe-card:nth-child(2) .equipe-cor {
-  background: var(--landpage-yellow);
+  background: var(--landpage-blue);
 }
 
 .landpage-wrapper .equipe-card:nth-child(3) .equipe-cor {
@@ -318,6 +329,45 @@
 
 .landpage-wrapper .equipe-card:nth-child(4) .equipe-cor {
   background: var(--landpage-red);
+}
+
+.landpage-wrapper .equipe-card:nth-child(5) .equipe-cor {
+  background: var(--landpage-purple);
+}
+
+/* Slideshow da equipe */
+.landpage-wrapper .equipe-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+  z-index: 1;
+}
+
+.landpage-wrapper .equipe-slide.active {
+  opacity: 1;
+}
+
+.landpage-wrapper .equipe-legenda {
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1.2;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.landpage-wrapper .equipe-categoria {
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: #000;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 /* ================= GAMIFICAÇÃO ================= */
@@ -612,8 +662,8 @@
   }
 
   .landpage-wrapper .equipe-card {
-    width: 250px;
-    height: 250px;
+    width: 350px;
+    height: 350px;
   }
 
   .landpage-wrapper .equipe-foto {
@@ -744,7 +794,17 @@
 
   .landpage-wrapper .equipe-card {
     width: 100%;
-    max-width: 280px;
+    max-width: 500px;
+    height: 500px;
+  }
+
+  .landpage-wrapper .equipe-legenda {
+    font-size: 14px;
+  }
+
+  .landpage-wrapper .equipe-categoria {
+    font-size: 16px;
+    margin-bottom: 8px;
   }
 
   .landpage-wrapper .gamificacao h2,

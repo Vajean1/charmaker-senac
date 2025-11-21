@@ -13,6 +13,21 @@ const Index: React.FC = () => {
   const [currentQuizImage, setCurrentQuizImage] = useState(0);
   const [currentComunidadeImage, setCurrentComunidadeImage] = useState(0);
 
+  const [currentTeamImage, setCurrentTeamImage] = useState(0);
+  const [isTeamPaused, setIsTeamPaused] = useState(false);
+
+  const [currentLogisticsImage, setCurrentLogisticsImage] = useState(0);
+  const [isLogisticsPaused, setIsLogisticsPaused] = useState(false);
+
+  const [currentVolunteersImage, setCurrentVolunteersImage] = useState(0);
+  const [isVolunteersPaused, setIsVolunteersPaused] = useState(false);
+
+  const [currentInstructorsImage, setCurrentInstructorsImage] = useState(0);
+  const [isInstructorsPaused, setIsInstructorsPaused] = useState(false);
+
+  const [currentCoordinationImage, setCurrentCoordinationImage] = useState(0);
+  const [isCoordinationPaused, setIsCoordinationPaused] = useState(false);
+
   const slides = Array.from({ length: 9 }, (_, i) => i);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
@@ -22,6 +37,39 @@ const Index: React.FC = () => {
     '/landpage/landpage_(28).jpeg',
     '/landpage/landpage_(13).jpeg',
     '/landpage/landpage_(1).jpeg'
+  ];
+
+  const teamMembers = [
+    { src: '/landpage/grupos/4.jpg', name: 'Marcos Alexandre', role: 'Desenvolvedor FrontEnd' },
+    { src: '/landpage/grupos/5.jpg', name: 'Thiago Nicolas', role: 'Desenvolvedor FrontEnd e BackEnd' },
+    { src: '/landpage/grupos/6.jpg', name: 'Joelyson Alcantara', role: 'Desenvolvedor Design, FrontEnd e BackEnd' },
+    { src: '/landpage/grupos/10.jpg', name: 'Gustavo Alves', role: 'Designer' },
+    { src: '/landpage/grupos/13.jpg', name: 'Harrison Souza', role: 'Designer' },
+    { src: '/landpage/grupos/14.jpg', name: 'João Marcos', role: 'Desenvolvedor FrontEnd e BackEnd' }
+  ];
+
+  const logisticsMembers = [
+    { src: '/landpage/grupos/16.jpg', name: 'Rayssa Nepomuceno', role: '' },
+    { src: '/landpage/grupos/15.jpg', name: 'Julia Beatriz', role: '' },
+    { src: '/landpage/grupos/17.jpg', name: 'Estefany Valentim', role: '' }
+  ];
+
+  const volunteersMembers = [
+    { src: '/landpage/grupos/8.jpg', name: 'Emerson Castiel', role: '' },
+    { src: '/landpage/grupos/9.jpg', name: 'Alanna Beatriz', role: '' },
+    { src: '/landpage/grupos/22.jpg', name: 'Itala Samara', role: '' },
+    { src: '/landpage/grupos/23.jpg', name: 'Elaine Barbosa', role: '' },
+    { src: '/landpage/grupos/12.jpg', name: 'Céu Nascimento', role: '' }
+  ];
+
+  const instructorsMembers = [
+    { src: '/landpage/grupos/18.jpg', name: 'Elvio Luiz', role: '' },
+    { src: '/landpage/grupos/25.jpeg', name: 'Matheus Eloim', role: '' },
+    { src: '/landpage/grupos/26.jpeg', name: 'Renata Santiago', role: '' }
+  ];
+
+  const coordinationMembers = [
+    { src: '/landpage/grupos/19.jpg', name: 'Mere Coutinho', role: '' }
   ];
 
   // Autoplay slider
@@ -63,6 +111,56 @@ const Index: React.FC = () => {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Autoplay team images
+  useEffect(() => {
+    if (!isTeamPaused) {
+      const interval = setInterval(() => {
+        setCurrentTeamImage(prev => (prev + 1) % teamMembers.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isTeamPaused, teamMembers.length]);
+
+  // Autoplay logistics images
+  useEffect(() => {
+    if (!isLogisticsPaused) {
+      const interval = setInterval(() => {
+        setCurrentLogisticsImage(prev => (prev + 1) % logisticsMembers.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isLogisticsPaused, logisticsMembers.length]);
+
+  // Autoplay volunteers images
+  useEffect(() => {
+    if (!isVolunteersPaused) {
+      const interval = setInterval(() => {
+        setCurrentVolunteersImage(prev => (prev + 1) % volunteersMembers.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isVolunteersPaused, volunteersMembers.length]);
+
+  // Autoplay instructors images
+  useEffect(() => {
+    if (!isInstructorsPaused) {
+      const interval = setInterval(() => {
+        setCurrentInstructorsImage(prev => (prev + 1) % instructorsMembers.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isInstructorsPaused, instructorsMembers.length]);
+
+  // Autoplay coordination images
+  useEffect(() => {
+    if (!isCoordinationPaused) {
+      const interval = setInterval(() => {
+        setCurrentCoordinationImage(prev => (prev + 1) % coordinationMembers.length);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isCoordinationPaused, coordinationMembers.length]);
 
   // Text truncation
   useEffect(() => {
@@ -289,10 +387,144 @@ Empoderamento: Fortalecer identidades e estimular protagonismo individual e cole
         <section id="equipe" className="equipe">
           <h2>Conheça a equipe</h2>
           <div className="equipe-grid">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="equipe-card">
-                <div className="equipe-foto"></div>
-                <div className="equipe-cor"></div>
+                {i === 1 ? (
+                  <>
+                    {logisticsMembers.map((member, index) => (
+                      <img
+                        key={index}
+                        src={member.src}
+                        alt={member.name}
+                        className={`equipe-slide ${index === currentLogisticsImage ? 'active' : ''}`}
+                        onMouseEnter={() => setIsLogisticsPaused(true)}
+                        onMouseLeave={() => setIsLogisticsPaused(false)}
+                        onClick={() => setCurrentLogisticsImage((prev) => (prev + 1) % logisticsMembers.length)}
+                        style={{ cursor: 'pointer' }}
+                        onError={(e) => {
+                          console.log(`Imagem não encontrada: ${member.src}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ))}
+                    <div className="equipe-cor">
+                      <div className="equipe-legenda">
+                        <div className="equipe-categoria">LOGÍSTICA</div>
+                        <strong>{logisticsMembers[currentLogisticsImage].name}</strong><br />
+                        {logisticsMembers[currentLogisticsImage].role}
+                      </div>
+                    </div>
+                  </>
+                ) : i === 2 ? (
+                  <>
+                    {teamMembers.map((member, index) => (
+                      <img
+                        key={index}
+                        src={member.src}
+                        alt={member.name}
+                        className={`equipe-slide ${index === currentTeamImage ? 'active' : ''}`}
+                        onMouseEnter={() => setIsTeamPaused(true)}
+                        onMouseLeave={() => setIsTeamPaused(false)}
+                        onClick={() => setCurrentTeamImage((prev) => (prev + 1) % teamMembers.length)}
+                        style={{ cursor: 'pointer' }}
+                        onError={(e) => {
+                          console.log(`Imagem não encontrada: ${member.src}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ))}
+                    <div className="equipe-cor">
+                      <div className="equipe-legenda">
+                        <div className="equipe-categoria">Desenvolvedores</div>
+                        <strong>{teamMembers[currentTeamImage].name}</strong><br />
+                        {teamMembers[currentTeamImage].role}
+                      </div>
+                    </div>
+                  </>
+                ) : i === 3 ? (
+                  <>
+                    {volunteersMembers.map((member, index) => (
+                      <img
+                        key={index}
+                        src={member.src}
+                        alt={member.name}
+                        className={`equipe-slide ${index === currentVolunteersImage ? 'active' : ''}`}
+                        onMouseEnter={() => setIsVolunteersPaused(true)}
+                        onMouseLeave={() => setIsVolunteersPaused(false)}
+                        onClick={() => setCurrentVolunteersImage((prev) => (prev + 1) % volunteersMembers.length)}
+                        style={{ cursor: 'pointer' }}
+                        onError={(e) => {
+                          console.log(`Imagem não encontrada: ${member.src}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ))}
+                    <div className="equipe-cor">
+                      <div className="equipe-legenda">
+                        <div className="equipe-categoria">Voluntários</div>
+                        <strong>{volunteersMembers[currentVolunteersImage].name}</strong><br />
+                        {volunteersMembers[currentVolunteersImage].role}
+                      </div>
+                    </div>
+                  </>
+                ) : i === 4 ? (
+                  <>
+                    {instructorsMembers.map((member, index) => (
+                      <img
+                        key={index}
+                        src={member.src}
+                        alt={member.name}
+                        className={`equipe-slide ${index === currentInstructorsImage ? 'active' : ''}`}
+                        onMouseEnter={() => setIsInstructorsPaused(true)}
+                        onMouseLeave={() => setIsInstructorsPaused(false)}
+                        onClick={() => setCurrentInstructorsImage((prev) => (prev + 1) % instructorsMembers.length)}
+                        style={{ cursor: 'pointer' }}
+                        onError={(e) => {
+                          console.log(`Imagem não encontrada: ${member.src}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ))}
+                    <div className="equipe-cor">
+                      <div className="equipe-legenda">
+                        <div className="equipe-categoria">Instrutores</div>
+                        <strong>{instructorsMembers[currentInstructorsImage].name}</strong><br />
+                        {instructorsMembers[currentInstructorsImage].role}
+                      </div>
+                    </div>
+                  </>
+                ) : i === 5 ? (
+                  <>
+                    {coordinationMembers.map((member, index) => (
+                      <img
+                        key={index}
+                        src={member.src}
+                        alt={member.name}
+                        className={`equipe-slide ${index === currentCoordinationImage ? 'active' : ''}`}
+                        onMouseEnter={() => setIsCoordinationPaused(true)}
+                        onMouseLeave={() => setIsCoordinationPaused(false)}
+                        onClick={() => setCurrentCoordinationImage((prev) => (prev + 1) % coordinationMembers.length)}
+                        style={{ cursor: 'pointer' }}
+                        onError={(e) => {
+                          console.log(`Imagem não encontrada: ${member.src}`);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ))}
+                    <div className="equipe-cor">
+                      <div className="equipe-legenda">
+                        <div className="equipe-categoria">coordenação pedagógica</div>
+                        <strong>{coordinationMembers[currentCoordinationImage].name}</strong><br />
+                        {coordinationMembers[currentCoordinationImage].role}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="equipe-foto"></div>
+                    <div className="equipe-cor"></div>
+                  </>
+                )}
               </div>
             ))}
           </div>
